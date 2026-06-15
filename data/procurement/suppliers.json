@@ -1,0 +1,22 @@
+[
+  {
+    "supplier_name": "ACME Sensors",
+    "country": "Malaysia",
+    "products": ["industrial temperature sensor", "pressure sensor"],
+    "certifications": ["ISO 9001", "RoHS"],
+    "delivery_capacity": "Two manufacturing sites; stated monthly capacity of 120000 sensor units.",
+    "risk_summary": "No sanctions match in local fixture. Delivery capacity requires customer reference confirmation.",
+    "listed": false,
+    "listing_reason": ""
+  },
+  {
+    "supplier_name": "Northstar Components",
+    "country": "Unknown",
+    "products": ["control module"],
+    "certifications": [],
+    "delivery_capacity": "Capacity not disclosed.",
+    "risk_summary": "Local fixture marks the company as restricted for export-control concerns.",
+    "listed": true,
+    "listing_reason": "Matched local export restriction fixture."
+  }
+]
