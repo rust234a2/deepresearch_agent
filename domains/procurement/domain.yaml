@@ -1,0 +1,35 @@
+name: procurement
+description: Supplier due diligence for procurement and supply-chain decisions.
+research_dimensions:
+  - supplier_profile
+  - product_capability
+  - delivery_capability
+  - compliance
+  - financial_stability
+  - negative_news
+  - geopolitical_or_sanctions_risk
+allowed_tools:
+  - search_supplier_docs
+  - search_public_news
+  - check_sanctions_or_blacklist
+  - extract_supplier_profile
+  - generate_risk_matrix
+report_sections:
+  - Executive Summary
+  - Supplier Profile
+  - Product Capability
+  - Delivery Capability
+  - Compliance and Certifications
+  - Risk Signals
+  - Evidence Table
+  - Recommendation
+  - Open Questions
+source_priority:
+  - official_supplier_documents
+  - government_or_regulatory_lists
+  - credible_news
+  - internal_procurement_records
+hitl_policy:
+  high_risk_recommendation: true
+  missing_compliance_evidence: true
+  conflicting_claims: true
