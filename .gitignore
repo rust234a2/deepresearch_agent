@@ -2,6 +2,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+.conda-env/
+.conda-pkgs/
+.conda-cache/
 dist/
 build/
 *.egg-info/
