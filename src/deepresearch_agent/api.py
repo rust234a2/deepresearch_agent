@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 
 from deepresearch_agent.agents.graph import run_research
 from deepresearch_agent.state import SupplierReport
 
 
+Question = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+
 class ResearchRequest(BaseModel):
-    question: str
+    question: Question
     domain: str = "procurement"
 
 

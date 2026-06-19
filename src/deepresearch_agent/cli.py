@@ -8,10 +8,10 @@ from rich.table import Table
 from deepresearch_agent.agents.graph import run_research
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Run a procurement DeepResearch supplier assessment.")
     parser.add_argument("question", help="Research question, including a known supplier name.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     state = run_research(args.question)
     if state.report is None:

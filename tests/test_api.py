@@ -15,3 +15,14 @@ def test_research_api_returns_report():
     data = response.json()
     assert data["supplier_name"] == "ACME Sensors"
     assert data["evidence_table"]
+
+
+def test_research_api_rejects_blank_question():
+    client = TestClient(app)
+
+    response = client.post(
+        "/research",
+        json={"question": "   "},
+    )
+
+    assert response.status_code == 422
