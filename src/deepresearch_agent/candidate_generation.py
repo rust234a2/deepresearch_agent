@@ -8,69 +8,92 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-INDUSTRY_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("半导体", ("半导体", "集成电路", "晶圆", "芯片", "封装测试", "刻蚀设备")),
-    ("医疗器械", ("医疗器械", "医用设备", "体外诊断", "医学影像")),
-    ("医药与原料药制造", ("医药制造", "原料药", "生物制药", "中药", "药物制剂")),
-    ("仪器仪表与传感器", ("仪器仪表", "传感器", "测量仪器", "分析仪器", "检测仪器")),
-    ("汽车零部件", ("汽车零部件", "汽车配件", "汽车制造", "车用零部件")),
-    ("工业自动化", ("工业自动化", "工业机器人", "数控系统", "伺服系统", "变频器")),
+INDUSTRIES = (
+    "电子元器件",
+    "半导体",
+    "汽车零部件",
+    "机械设备",
+    "工业自动化",
+    "仪器仪表与传感器",
+    "电气设备",
+    "光伏、储能与新能源设备",
+    "金属与基础材料",
+    "化工与新材料",
+    "橡胶与塑料制品",
+    "纺织与工业用布",
+    "医疗器械",
+    "医药与原料药制造",
+    "包装、纸制品与印刷材料",
+)
+
+PRIMARY_INDUSTRY_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("汽车零部件", ("汽车制造业",)),
+    ("仪器仪表与传感器", ("仪器仪表制造业",)),
+    ("医药与原料药制造", ("医药制造业",)),
     (
         "电子元器件",
-        (
-            "计算机、通信和其他电子设备制造",
-            "电子元件",
-            "电子器件",
-            "元器件",
-            "印制电路",
-            "光电子",
-        ),
+        ("计算机、通信和其他电子设备制造业",),
     ),
     (
         "电气设备",
-        ("电气机械和器材制造", "输配电", "变压器", "电线电缆", "开关设备", "电机制造"),
-    ),
-    (
-        "光伏、储能与新能源设备",
-        ("光伏", "储能", "锂电", "风电设备", "新能源设备", "电池制造", "太阳能设备"),
+        ("电气机械和器材制造业",),
     ),
     (
         "橡胶与塑料制品",
-        ("橡胶和塑料制品", "橡胶制品", "塑料制品", "改性塑料"),
+        ("橡胶和塑料制品业",),
     ),
     (
         "纺织与工业用布",
-        ("纺织", "工业用布", "服装制造", "化学纤维制造", "非织造布"),
+        ("纺织业", "纺织服装、服饰业", "化学纤维制造业"),
     ),
     (
         "包装、纸制品与印刷材料",
-        ("造纸和纸制品", "印刷和记录媒介复制", "包装材料", "包装制品"),
+        ("造纸和纸制品业", "印刷和记录媒介复制业"),
     ),
     (
         "化工与新材料",
-        ("化学原料和化学制品制造", "化工", "新材料", "涂料", "农药", "复合材料"),
+        ("化学原料和化学制品制造业", "石油、煤炭及其他燃料加工业"),
     ),
     (
         "金属与基础材料",
-        ("黑色金属冶炼", "有色金属冶炼", "金属制品", "钢铁", "铜材", "铝材", "稀土"),
+        (
+            "黑色金属冶炼和压延加工业",
+            "有色金属冶炼和压延加工业",
+            "金属制品业",
+            "非金属矿物制品业",
+            "废弃资源综合利用业",
+        ),
     ),
     (
         "机械设备",
         (
-            "通用设备制造",
-            "专用设备制造",
-            "机械设备",
-            "工程机械",
-            "轨道交通设备",
-            "船舶制造",
-            "航空航天器制造",
-            "泵及真空设备",
-            "阀门制造",
+            "通用设备制造业",
+            "专用设备制造业",
+            "铁路、船舶、航空航天和其他运输设备制造业",
         ),
     ),
 )
 
-INDUSTRIES = tuple(industry for industry, _ in INDUSTRY_KEYWORDS)
+SPECIFIC_BUSINESS_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("半导体", ("半导体", "集成电路", "晶圆", "芯片", "封装测试", "刻蚀设备")),
+    ("医疗器械", ("医疗器械", "医用设备", "体外诊断", "医学影像")),
+    (
+        "光伏、储能与新能源设备",
+        ("光伏", "储能", "锂电", "风电设备", "新能源设备", "电池", "太阳能"),
+    ),
+    ("工业自动化", ("工业自动化", "工业机器人", "数控系统", "伺服系统", "变频器")),
+    ("仪器仪表与传感器", ("传感器", "测量仪器", "分析仪器", "检测仪器")),
+)
+
+BUSINESS_DETAIL_INDUSTRIES = {
+    "电子元器件",
+    "机械设备",
+    "仪器仪表与传感器",
+    "电气设备",
+    "金属与基础材料",
+    "化工与新材料",
+    "橡胶与塑料制品",
+}
 
 
 @dataclass(frozen=True)
@@ -80,14 +103,24 @@ class Candidate:
 
 
 def classify_candidate(record: dict) -> str | None:
-    text = " ".join(
-        str(record.get(key) or "")
-        for key in ("INDUSTRYCSRC1", "MAIN_BUSINESS", "BUSINESS_SCOPE")
+    source_industry = str(record.get("INDUSTRYCSRC1") or "")
+    primary_industry = next(
+        (
+            industry
+            for industry, keywords in PRIMARY_INDUSTRY_KEYWORDS
+            if any(keyword in source_industry for keyword in keywords)
+        ),
+        None,
     )
-    for industry, keywords in INDUSTRY_KEYWORDS:
-        if any(keyword in text for keyword in keywords):
-            return industry
-    return None
+    if primary_industry is None:
+        return None
+
+    if primary_industry in BUSINESS_DETAIL_INDUSTRIES:
+        main_business = str(record.get("MAIN_BUSINESS") or "")
+        for industry, keywords in SPECIFIC_BUSINESS_KEYWORDS:
+            if any(keyword in main_business for keyword in keywords):
+                return industry
+    return primary_industry
 
 
 def build_candidates(records: Iterable[dict], limit: int = 5000) -> list[Candidate]:

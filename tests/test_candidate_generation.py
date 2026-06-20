@@ -40,6 +40,39 @@ def test_classify_candidate_rejects_non_manufacturing_company():
     assert classify_candidate(record) is None
 
 
+def test_classify_candidate_rejects_pharmacy_retailer():
+    record = {
+        "ORG_NAME": "示例药房股份有限公司",
+        "INDUSTRYCSRC1": "零售业",
+        "MAIN_BUSINESS": "医药零售连锁和医药配送业务",
+        "BUSINESS_SCOPE": "医疗器械和保健用品销售",
+    }
+
+    assert classify_candidate(record) is None
+
+
+def test_classify_candidate_keeps_vehicle_manufacturer_in_automotive():
+    record = {
+        "ORG_NAME": "示例商用车股份有限公司",
+        "INDUSTRYCSRC1": "汽车制造业",
+        "MAIN_BUSINESS": "商用车的研发、生产和销售",
+        "BUSINESS_SCOPE": "汽车及仪器仪表的制造和销售",
+    }
+
+    assert classify_candidate(record) == "汽车零部件"
+
+
+def test_classify_candidate_keeps_engineering_machinery_in_equipment():
+    record = {
+        "ORG_NAME": "示例重工股份有限公司",
+        "INDUSTRYCSRC1": "专用设备制造业",
+        "MAIN_BUSINESS": "工程机械的研发、制造、销售和服务",
+        "BUSINESS_SCOPE": "机械设备及橡胶制品销售",
+    }
+
+    assert classify_candidate(record) == "机械设备"
+
+
 def test_build_candidates_deduplicates_legal_names():
     records = [
         {
