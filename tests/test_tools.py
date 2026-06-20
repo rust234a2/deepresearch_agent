@@ -31,3 +31,14 @@ def test_unknown_tool_raises_key_error():
         assert "missing_tool" in str(exc)
     else:
         raise AssertionError("missing tool should raise KeyError")
+
+
+def test_unknown_supplier_returns_structured_tool_error():
+    registry = build_procurement_tool_registry()
+
+    result = registry.run("extract_supplier_profile", {"supplier_name": "Missing Supplier"})
+
+    assert result.status == "error"
+    assert "Unknown supplier" in result.data["error"]
+    assert result.permission_tier == "read_public"
+    assert result.latency_ms >= 0

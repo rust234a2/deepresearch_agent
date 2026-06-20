@@ -1,44 +1,27 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
+from deepresearch_agent.data_loader import find_supplier_profile
 from deepresearch_agent.tools.base import RegisteredTool, ToolRegistry
 
 
-DATA_PATH = Path("data/procurement/suppliers.json")
-
-
-def _load_suppliers() -> list[dict]:
-    return json.loads(DATA_PATH.read_text(encoding="utf-8"))
-
-
-def _find_supplier(name: str) -> dict:
-    normalized = name.lower()
-    for supplier in _load_suppliers():
-        if supplier["supplier_name"].lower() == normalized:
-            return supplier
-    raise ValueError(f"Unknown supplier: {name}")
-
-
 def _extract_supplier_profile(args: dict) -> dict:
-    supplier = _find_supplier(args["supplier_name"])
+    supplier = find_supplier_profile(args["supplier_name"])
     return {
-        "supplier_name": supplier["supplier_name"],
-        "country": supplier["country"],
-        "products": supplier["products"],
-        "certifications": supplier["certifications"],
-        "delivery_capacity": supplier["delivery_capacity"],
-        "risk_summary": supplier["risk_summary"],
+        "supplier_name": supplier.company.legal_name,
+        "country": supplier.company.country,
+        "products": supplier.capability.products,
+        "certifications": supplier.compliance.certifications,
+        "delivery_capacity": supplier.capability.delivery_capacity,
+        "risk_summary": supplier.compliance.risk_summary or "No risk summary in supplier profile.",
     }
 
 
 def _check_sanctions_or_blacklist(args: dict) -> dict:
-    supplier = _find_supplier(args["company_name"])
+    supplier = find_supplier_profile(args["company_name"])
     return {
-        "company_name": supplier["supplier_name"],
-        "listed": supplier["listed"],
-        "reason": supplier["listing_reason"] or "No match in local sanctions fixture.",
+        "company_name": supplier.company.legal_name,
+        "listed": supplier.compliance.sanctions_listed or supplier.compliance.blacklist_listed,
+        "reason": supplier.compliance.listing_reason or "No match in local sanctions fixture.",
     }
 
 
