@@ -61,19 +61,16 @@ def researcher_node(
         raise ValueError("planner_node must set supplier_name before researcher_node")
 
     if "extract_supplier_profile" in domain_pack.allowed_tools:
-        profile_result = tools.run("extract_supplier_profile", {"supplier_name": state.supplier_name})
-        state.trace.append(
-            ToolTrace(
-                tool_name=profile_result.name,
-                args={"supplier_name": state.supplier_name},
-                status=profile_result.status,
-                latency_ms=profile_result.latency_ms,
-                permission_tier=profile_result.permission_tier,
-            )
+        profile_result = _run_tool(
+            state,
+            tools,
+            "extract_supplier_profile",
+            {"supplier_name": state.supplier_name},
         )
-        if profile_result.status == "ok":
+        if profile_result is not None and profile_result.status == "ok":
             data = profile_result.data
-            state.evidence.append(
+            _append_evidence(
+                state,
                 Evidence(
                     claim=f"{state.supplier_name} supplies {', '.join(data['products'])}.",
                     dimension="supplier_profile",
@@ -87,7 +84,8 @@ def researcher_node(
                 ),
             )
             if data["certifications"]:
-                state.evidence.append(
+                _append_evidence(
+                    state,
                     Evidence(
                         claim=f"{state.supplier_name} lists certifications: {', '.join(data['certifications'])}.",
                         dimension="compliance",
@@ -102,18 +100,15 @@ def researcher_node(
                 )
 
     if "check_sanctions_or_blacklist" in domain_pack.allowed_tools:
-        sanctions_result = tools.run("check_sanctions_or_blacklist", {"company_name": state.supplier_name})
-        state.trace.append(
-            ToolTrace(
-                tool_name=sanctions_result.name,
-                args={"company_name": state.supplier_name},
-                status=sanctions_result.status,
-                latency_ms=sanctions_result.latency_ms,
-                permission_tier=sanctions_result.permission_tier,
-            )
+        sanctions_result = _run_tool(
+            state,
+            tools,
+            "check_sanctions_or_blacklist",
+            {"company_name": state.supplier_name},
         )
-        if sanctions_result.status == "ok":
-            state.evidence.append(
+        if sanctions_result is not None and sanctions_result.status == "ok":
+            _append_evidence(
+                state,
                 Evidence(
                     claim=f"Sanctions fixture listed={sanctions_result.data['listed']} for {state.supplier_name}.",
                     dimension="geopolitical_or_sanctions_risk",
@@ -128,13 +123,17 @@ def researcher_node(
             )
 
     if "search_supplier_docs" in domain_pack.allowed_tools:
-        for item in state.plan:
+        plan_items = state.plan
+        if state.iteration > 0:
+            plan_items = [item for item in state.plan if item.dimension in state.missing_dimensions]
+        for item in plan_items:
             for result in retriever.search(
                 f"{state.supplier_name} {item.question}",
                 limit=1,
                 supplier_name=state.supplier_name,
             ):
-                state.evidence.append(
+                _append_evidence(
+                    state,
                     Evidence(
                         claim=result.snippet,
                         dimension=item.dimension,
@@ -221,6 +220,46 @@ def _write_unresolved_supplier_report(state: ResearchState) -> ResearchState:
         open_questions=[question],
     )
     return state
+
+
+def _run_tool(state: ResearchState, tools: ToolRegistry, name: str, args: dict):
+    if any(item.tool_name == name and item.args == args for item in state.trace):
+        return None
+
+    try:
+        result = tools.run(name, args)
+    except Exception:
+        state.trace.append(
+            ToolTrace(
+                tool_name=name,
+                args=args,
+                status="error",
+                latency_ms=0,
+                permission_tier="unavailable",
+            )
+        )
+        return None
+
+    state.trace.append(
+        ToolTrace(
+            tool_name=result.name,
+            args=args,
+            status=result.status,
+            latency_ms=result.latency_ms,
+            permission_tier=result.permission_tier,
+        )
+    )
+    return result
+
+
+def _append_evidence(state: ResearchState, evidence: Evidence) -> None:
+    key = (evidence.dimension, evidence.citation.source_id, evidence.claim)
+    existing_keys = {
+        (item.dimension, item.citation.source_id, item.claim)
+        for item in state.evidence
+    }
+    if key not in existing_keys:
+        state.evidence.append(evidence)
 
 
 def _risk_lines(state: ResearchState) -> list[str]:

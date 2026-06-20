@@ -5,6 +5,7 @@ from deepresearch_agent.domain import load_domain_pack
 from deepresearch_agent.retrieval.local import LocalDocumentRetriever
 from deepresearch_agent.state import ResearchState
 from deepresearch_agent.tools.procurement import build_procurement_tool_registry
+from deepresearch_agent.tools.base import ToolRegistry
 
 
 DOMAIN_PACK = load_domain_pack(Path("domains/procurement/domain.yaml"))
@@ -86,6 +87,27 @@ def test_researcher_respects_domain_tool_allowlist():
     assert updated.evidence == []
     assert updated.trace == []
     assert updated.iteration == 1
+
+
+def test_researcher_records_unavailable_tool_and_continues():
+    profile_only_pack = DOMAIN_PACK.model_copy(update={"allowed_tools": ["extract_supplier_profile"]})
+    state = planner_node(
+        ResearchState(question="Assess ACME Sensors", domain="procurement"),
+        domain_pack=profile_only_pack,
+    )
+
+    updated = researcher_node(
+        state,
+        retriever=LocalDocumentRetriever("data/procurement/documents"),
+        tools=ToolRegistry(),
+        domain_pack=profile_only_pack,
+    )
+
+    assert updated.iteration == 1
+    assert updated.evidence == []
+    assert len(updated.trace) == 1
+    assert updated.trace[0].tool_name == "extract_supplier_profile"
+    assert updated.trace[0].status == "error"
 
 
 def test_critic_identifies_missing_dimensions_when_evidence_is_empty():

@@ -16,6 +16,22 @@ def test_graph_generates_report_for_approved_supplier():
     assert [item.dimension for item in final_state.plan] == domain_pack.research_dimensions
 
 
+def test_graph_deduplicates_evidence_and_deterministic_tool_calls_across_retries():
+    final_state = run_research("Assess ACME Sensors for industrial sensor procurement")
+
+    evidence_keys = [
+        (item.dimension, item.citation.source_id, item.claim)
+        for item in final_state.evidence
+    ]
+    trace_keys = [
+        (item.tool_name, tuple(sorted(item.args.items())))
+        for item in final_state.trace
+    ]
+
+    assert len(evidence_keys) == len(set(evidence_keys))
+    assert len(trace_keys) == len(set(trace_keys))
+
+
 def test_graph_rejects_known_restricted_supplier():
     final_state = run_research("Assess Northstar Components for control module procurement")
 
