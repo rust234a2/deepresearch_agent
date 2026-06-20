@@ -5,6 +5,26 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+_STOP_WORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "does",
+    "evidence",
+    "exist",
+    "exists",
+    "for",
+    "is",
+    "of",
+    "or",
+    "supplier",
+    "the",
+    "to",
+    "what",
+}
+
+
 @dataclass(frozen=True)
 class RetrievalResult:
     source_id: str
@@ -27,10 +47,23 @@ class LocalDocumentRetriever:
             docs.append((path, title, text))
         return docs
 
-    def search(self, query: str, limit: int = 5) -> list[RetrievalResult]:
+    def search(
+        self,
+        query: str,
+        limit: int = 5,
+        supplier_name: str | None = None,
+    ) -> list[RetrievalResult]:
         query_terms = self._terms(query)
+        supplier_key = self._slug(supplier_name) if supplier_name else None
+        if supplier_name:
+            query_terms -= self._terms(supplier_name)
+        if not query_terms:
+            return []
+
         scored: list[RetrievalResult] = []
         for path, title, text in self.documents:
+            if supplier_key and path.stem != supplier_key:
+                continue
             text_terms = self._terms(text)
             overlap = query_terms.intersection(text_terms)
             if not overlap:
@@ -49,7 +82,15 @@ class LocalDocumentRetriever:
 
     @staticmethod
     def _terms(text: str) -> set[str]:
-        return {term.lower() for term in re.findall(r"[A-Za-z0-9]+", text)}
+        return {
+            term.casefold()
+            for term in re.findall(r"[A-Za-z0-9]+", text)
+            if term.casefold() not in _STOP_WORDS
+        }
+
+    @staticmethod
+    def _slug(text: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "-", text.casefold()).strip("-")
 
     @staticmethod
     def _snippet(text: str, overlap: set[str]) -> str:

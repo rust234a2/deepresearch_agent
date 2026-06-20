@@ -122,7 +122,11 @@ def researcher_node(
 
     if "search_supplier_docs" in domain_pack.allowed_tools:
         for item in state.plan:
-            for result in retriever.search(f"{state.supplier_name} {item.question}", limit=1):
+            for result in retriever.search(
+                f"{state.supplier_name} {item.question}",
+                limit=1,
+                supplier_name=state.supplier_name,
+            ):
                 state.evidence.append(
                     Evidence(
                         claim=result.snippet,

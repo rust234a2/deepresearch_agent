@@ -41,6 +41,8 @@ def test_researcher_collects_evidence():
     assert updated.evidence
     assert any(item.dimension == "compliance" for item in updated.evidence)
     assert updated.trace
+    document_evidence = [item for item in updated.evidence if item.citation.source_id.startswith("doc:")]
+    assert all(item.citation.source_id == "doc:acme-sensors" for item in document_evidence)
 
 
 def test_researcher_respects_domain_tool_allowlist():
