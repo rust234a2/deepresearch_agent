@@ -4,6 +4,7 @@ from deepresearch_agent.candidate_generation import (
     Candidate,
     build_candidates,
     classify_candidate,
+    parse_source_page,
     select_balanced_candidates,
     write_candidates_csv,
 )
@@ -76,3 +77,42 @@ def test_write_candidates_csv_uses_expected_columns(tmp_path):
     with output.open(encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert rows == [{"supplier_name": "示例设备股份有限公司", "industry": "机械设备"}]
+
+
+def test_parse_source_page_keeps_only_active_china_mainland_listings():
+    payload = {
+        "result": {
+            "pages": 1,
+            "data": [
+                {
+                    "ORG_NAME": "示例设备股份有限公司",
+                    "LISTING_STATE": "0",
+                    "COUNTRY": "China 中国",
+                    "SECUCODE": "000001.SZ",
+                },
+                {
+                    "ORG_NAME": "退市设备股份有限公司",
+                    "LISTING_STATE": "1",
+                    "COUNTRY": "China 中国",
+                    "SECUCODE": "000002.SZ",
+                },
+                {
+                    "ORG_NAME": "境外设备股份有限公司",
+                    "LISTING_STATE": "0",
+                    "COUNTRY": "United States 美国",
+                    "SECUCODE": "000003.SZ",
+                },
+                {
+                    "ORG_NAME": "港股设备股份有限公司",
+                    "LISTING_STATE": "0",
+                    "COUNTRY": "China 中国",
+                    "SECUCODE": "00004.HK",
+                },
+            ],
+        }
+    }
+
+    records, pages = parse_source_page(payload)
+
+    assert pages == 1
+    assert [item["ORG_NAME"] for item in records] == ["示例设备股份有限公司"]

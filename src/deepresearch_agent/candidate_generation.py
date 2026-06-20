@@ -131,3 +131,25 @@ def write_candidates_csv(candidates: Iterable[Candidate], output: str | Path) ->
         writer = csv.DictWriter(handle, fieldnames=["supplier_name", "industry"])
         writer.writeheader()
         writer.writerows(asdict(candidate) for candidate in candidates)
+
+
+def parse_source_page(payload: dict) -> tuple[list[dict], int]:
+    result = payload.get("result")
+    if not isinstance(result, dict):
+        raise ValueError("Source response does not contain a result object")
+
+    pages = int(result.get("pages") or 0)
+    records: list[dict] = []
+    for item in result.get("data") or []:
+        country = str(item.get("COUNTRY") or "")
+        security_code = str(item.get("SECUCODE") or "")
+        is_mainland_company = "中国" in country or "china" in country.casefold()
+        is_mainland_listing = security_code.endswith((".SH", ".SZ", ".BJ"))
+        if (
+            str(item.get("LISTING_STATE")) == "0"
+            and is_mainland_company
+            and is_mainland_listing
+            and str(item.get("ORG_NAME") or "").strip()
+        ):
+            records.append(item)
+    return records, pages
