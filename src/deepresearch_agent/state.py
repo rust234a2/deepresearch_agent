@@ -8,6 +8,62 @@ from pydantic import BaseModel, Field, HttpUrl
 Recommendation = Literal["approve", "conditional", "reject", "insufficient_evidence"]
 
 
+class CompanyProfile(BaseModel):
+    legal_name: str
+    country: str
+    registration_id: str | None = None
+    aliases: list[str] = Field(default_factory=list)
+    registered_address: str | None = None
+    operating_address: str | None = None
+    website: str | HttpUrl | None = None
+    status: str | None = None
+
+
+class SupplierCapability(BaseModel):
+    products: list[str] = Field(default_factory=list)
+    delivery_capacity: str | None = None
+    production_sites: int | None = Field(default=None, ge=0)
+    monthly_capacity_units: int | None = Field(default=None, ge=0)
+    minimum_order_quantity: int | None = Field(default=None, ge=0)
+    lead_time_days: int | None = Field(default=None, ge=0)
+    supports_customization: bool | None = None
+
+
+class ComplianceProfile(BaseModel):
+    certifications: list[str] = Field(default_factory=list)
+    sanctions_listed: bool = False
+    blacklist_listed: bool = False
+    listing_reason: str | None = None
+    risk_summary: str | None = None
+    administrative_penalties: list[str] = Field(default_factory=list)
+    legal_cases: list[str] = Field(default_factory=list)
+    negative_news: list[str] = Field(default_factory=list)
+
+
+class FinancialProfile(BaseModel):
+    revenue: float | None = Field(default=None, ge=0.0)
+    currency: str | None = None
+    fiscal_year: int | None = None
+    credit_rating: str | None = None
+    risk_summary: str | None = None
+
+
+class ProcurementHistory(BaseModel):
+    approved_supplier: bool | None = None
+    historical_order_count: int | None = Field(default=None, ge=0)
+    on_time_delivery_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    quality_issue_count: int | None = Field(default=None, ge=0)
+    notes: list[str] = Field(default_factory=list)
+
+
+class SupplierDueDiligenceProfile(BaseModel):
+    company: CompanyProfile
+    capability: SupplierCapability
+    compliance: ComplianceProfile
+    financial: FinancialProfile = Field(default_factory=FinancialProfile)
+    procurement_history: ProcurementHistory = Field(default_factory=ProcurementHistory)
+
+
 class Citation(BaseModel):
     source_id: str
     title: str
