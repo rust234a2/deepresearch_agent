@@ -26,7 +26,8 @@ def find_supplier_profile(
 ) -> SupplierDueDiligenceProfile:
     normalized = name.casefold()
     for supplier in load_supplier_profiles(path):
-        if supplier.company.legal_name.casefold() == normalized:
+        known_names = [supplier.company.legal_name, *supplier.company.aliases]
+        if any(candidate.casefold() == normalized for candidate in known_names):
             return supplier
     raise ValueError(f"Unknown supplier: {name}")
 
@@ -36,6 +37,7 @@ def _supplier_from_fixture(item: dict) -> SupplierDueDiligenceProfile:
         company=CompanyProfile(
             legal_name=item["supplier_name"],
             country=item["country"],
+            aliases=item.get("aliases", []),
         ),
         capability=SupplierCapability(
             products=item.get("products", []),

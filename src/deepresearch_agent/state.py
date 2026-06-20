@@ -8,6 +8,14 @@ from pydantic import BaseModel, Field, HttpUrl
 Recommendation = Literal["approve", "conditional", "reject", "insufficient_evidence"]
 
 
+class SupplierResolution(BaseModel):
+    status: Literal["resolved", "ambiguous", "not_found"]
+    supplier_name: str | None = None
+    matched_text: str | None = None
+    match_type: Literal["legal_name", "alias"] | None = None
+    candidates: list[str] = Field(default_factory=list)
+
+
 class CompanyProfile(BaseModel):
     legal_name: str
     country: str
@@ -105,6 +113,7 @@ class ResearchState(BaseModel):
     question: str
     domain: str
     supplier_name: str | None = None
+    supplier_resolution: SupplierResolution | None = None
     iteration: int = 0
     max_iterations: int = 3
     plan: list[ResearchPlanItem] = Field(default_factory=list)

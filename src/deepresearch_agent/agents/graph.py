@@ -17,6 +17,12 @@ def _should_continue(state: ResearchState) -> str:
     return "writer"
 
 
+def _route_after_planner(state: ResearchState) -> str:
+    if state.supplier_resolution is not None and state.supplier_resolution.status == "resolved":
+        return "researcher"
+    return "writer"
+
+
 def build_graph(domain_pack: DomainPack):
     retriever = LocalDocumentRetriever("data/procurement/documents")
     tools = build_procurement_tool_registry()
@@ -36,7 +42,14 @@ def build_graph(domain_pack: DomainPack):
     graph.add_node("writer", lambda state: writer_node(state, domain_pack=domain_pack))
 
     graph.set_entry_point("planner")
-    graph.add_edge("planner", "researcher")
+    graph.add_conditional_edges(
+        "planner",
+        _route_after_planner,
+        {
+            "researcher": "researcher",
+            "writer": "writer",
+        },
+    )
     graph.add_edge("researcher", "critic")
     graph.add_conditional_edges(
         "critic",

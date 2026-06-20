@@ -10,6 +10,7 @@ from deepresearch_agent.state import (
     SupplierReport,
     ToolTrace,
 )
+from deepresearch_agent.supplier_resolution import resolve_supplier
 from deepresearch_agent.tools.base import ToolRegistry
 
 
@@ -31,8 +32,14 @@ _HIGH_PRIORITY_DIMENSIONS = {
 
 
 def planner_node(state: ResearchState, domain_pack: DomainPack) -> ResearchState:
-    supplier_name = _extract_supplier_name(state.question)
-    state.supplier_name = supplier_name
+    resolution = resolve_supplier(state.question)
+    state.supplier_resolution = resolution
+    state.supplier_name = resolution.supplier_name
+    if resolution.status != "resolved" or resolution.supplier_name is None:
+        state.plan = []
+        return state
+
+    supplier_name = resolution.supplier_name
     state.plan = [
         ResearchPlanItem(
             dimension=dimension,
@@ -154,7 +161,7 @@ def critique_node(state: ResearchState) -> ResearchState:
 
 def writer_node(state: ResearchState, domain_pack: DomainPack) -> ResearchState:
     if state.supplier_name is None:
-        raise ValueError("supplier_name is required to write a report")
+        return _write_unresolved_supplier_report(state)
 
     has_sanctions_risk = any(
         item.dimension == "geopolitical_or_sanctions_risk" and "listed=True" in item.claim
@@ -195,12 +202,25 @@ def _question_for_dimension(dimension: str, supplier_name: str) -> str:
     return template.format(supplier_name=supplier_name)
 
 
-def _extract_supplier_name(question: str) -> str:
-    known = ["ACME Sensors", "Northstar Components"]
-    for supplier in known:
-        if supplier.lower() in question.lower():
-            return supplier
-    return question.split(" for ")[0].replace("Assess ", "").strip()
+def _write_unresolved_supplier_report(state: ResearchState) -> ResearchState:
+    resolution = state.supplier_resolution
+    if resolution is not None and resolution.status == "ambiguous":
+        candidates = ", ".join(resolution.candidates)
+        summary = f"Multiple preset suppliers were found: {candidates}. A single supplier is required."
+        question = f"Please specify one supplier from: {candidates}."
+    else:
+        summary = "No supplier in the preset dataset could be identified from the question."
+        question = "Please provide a supplier name available in the preset dataset."
+
+    state.report = SupplierReport(
+        supplier_name="Unknown supplier",
+        recommendation="insufficient_evidence",
+        summary=summary,
+        risks=["Supplier identity is unresolved; due diligence was not started."],
+        evidence_table=[],
+        open_questions=[question],
+    )
+    return state
 
 
 def _risk_lines(state: ResearchState) -> list[str]:

@@ -22,6 +22,27 @@ def test_planner_extracts_supplier_and_dimensions():
     assert [item.dimension for item in updated.plan] == DOMAIN_PACK.research_dimensions
 
 
+def test_planner_resolves_alias_to_canonical_supplier_name():
+    state = ResearchState(question="评估艾克米传感器的交付能力", domain="procurement")
+
+    updated = planner_node(state, domain_pack=DOMAIN_PACK)
+
+    assert updated.supplier_name == "ACME Sensors"
+    assert updated.supplier_resolution is not None
+    assert updated.supplier_resolution.status == "resolved"
+
+
+def test_planner_does_not_create_plan_for_unknown_supplier():
+    state = ResearchState(question="Assess Missing Supplier", domain="procurement")
+
+    updated = planner_node(state, domain_pack=DOMAIN_PACK)
+
+    assert updated.supplier_name is None
+    assert updated.plan == []
+    assert updated.supplier_resolution is not None
+    assert updated.supplier_resolution.status == "not_found"
+
+
 def test_researcher_collects_evidence():
     state = planner_node(
         ResearchState(

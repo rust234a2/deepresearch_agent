@@ -24,6 +24,26 @@ def test_graph_rejects_known_restricted_supplier():
     assert any("Human review required" in question for question in final_state.report.open_questions)
 
 
+def test_graph_returns_insufficient_evidence_for_unknown_supplier():
+    final_state = run_research("Assess Missing Supplier for control module procurement")
+
+    assert final_state.report is not None
+    assert final_state.report.recommendation == "insufficient_evidence"
+    assert final_state.report.evidence_table == []
+    assert final_state.iteration == 0
+    assert any("supplier" in question.lower() for question in final_state.report.open_questions)
+
+
+def test_graph_requests_clarification_for_ambiguous_supplier_question():
+    final_state = run_research("Compare ACME with Northstar for this purchase")
+
+    assert final_state.report is not None
+    assert final_state.report.recommendation == "insufficient_evidence"
+    assert final_state.report.evidence_table == []
+    assert "ACME Sensors" in final_state.report.summary
+    assert "Northstar Components" in final_state.report.summary
+
+
 def test_router_stops_when_iteration_budget_is_exhausted():
     state = ResearchState(
         question="Assess ACME Sensors",

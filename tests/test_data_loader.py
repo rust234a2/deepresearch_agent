@@ -8,6 +8,7 @@ def test_load_supplier_profiles_from_fixture():
 
     acme = profiles[0]
     assert acme.company.legal_name == "ACME Sensors"
+    assert "艾克米传感器" in acme.company.aliases
     assert acme.company.country == "Malaysia"
     assert acme.capability.products == ["industrial temperature sensor", "pressure sensor"]
     assert acme.capability.monthly_capacity_units == 120000
@@ -25,6 +26,12 @@ def test_find_supplier_profile_by_name_case_insensitive():
     assert profile.company.legal_name == "Northstar Components"
     assert profile.compliance.sanctions_listed is True
     assert profile.compliance.listing_reason == "Matched local export restriction fixture."
+
+
+def test_find_supplier_profile_by_alias():
+    profile = find_supplier_profile("Northstar")
+
+    assert profile.company.legal_name == "Northstar Components"
 
 
 def test_find_supplier_profile_raises_for_unknown_supplier():
