@@ -1,52 +1,68 @@
 # DeepResearch Agent
 
-An open-source, pluggable DeepResearch Agent framework built on LangGraph. The v1 domain is supplier due diligence for procurement and supply-chain decisions.
+基于 LangGraph 的采购供应商尽调 Agent。当前 v1 使用本地预设供应商数据和 Markdown 文档，完成供应商识别、研究规划、证据收集、缺口检查和带引用报告生成。
 
-## When To Use This
+## 当前范围
 
-Use DeepResearch when an answer requires gathering evidence from many sources, deciding what to search next, resolving missing evidence, and producing a cited report. Do not use it for single-fact lookup, one-authority-source questions, or latency-sensitive chat.
+- 支持 `ACME Sensors` 和 `Northstar Components`，以及预设别名。
+- Domain Pack 驱动研究维度、工具白名单和 HITL 规则。
+- 供应商名称无法识别或同时命中多个供应商时，返回 `insufficient_evidence`，不会猜测实体。
+- 数据全部来自 `data/procurement/`，当前不接实时 API、网页爬取、数据库、Qdrant、GraphRAG 或 MCP。
+- RAGAS、Phoenix 和 golden case 评估已后置，待可用版稳定后实施。
 
-## v1 Demo
-
-```bash
-python -m venv .venv
-. .venv/Scripts/activate
-pip install -e ".[dev]"
-pytest
-deepresearch "Assess ACME Sensors for industrial sensor procurement"
-```
-
-For the local conda environment used during development in this workspace:
+## 安装
 
 ```powershell
-conda activate E:\vibe_coding_prj\deepresearch_agent\.conda-env
-python -m deepresearch_agent.cli "Assess ACME Sensors for industrial sensor procurement"
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
 ```
+
+本工作区已有 conda 环境时，可直接使用：
+
+```powershell
+.\.conda-env\python.exe -m pytest -q
+```
+
+## CLI
+
+```powershell
+.\.conda-env\python.exe -m deepresearch_agent.cli "Assess ACME Sensors for industrial sensor procurement"
+.\.conda-env\python.exe -m deepresearch_agent.cli "Assess Northstar Components for control module procurement"
+.\.conda-env\python.exe -m deepresearch_agent.cli "Assess Missing Supplier"
+```
+
+也可以在安装项目后使用 `deepresearch` 命令。
 
 ## API
 
-```bash
-uvicorn deepresearch_agent.api:app --reload
+```powershell
+.\.conda-env\python.exe -m uvicorn deepresearch_agent.api:app --reload
 ```
 
-```bash
-curl -X POST http://127.0.0.1:8000/research \
-  -H "Content-Type: application/json" \
-  -d "{\"question\":\"Assess ACME Sensors for industrial sensor procurement\"}"
+请求示例：
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/research `
+  -ContentType "application/json" `
+  -Body '{"question":"Assess ACME Sensors for industrial sensor procurement"}'
 ```
 
-## Architecture
+## 核心流程
 
 ```text
-Planner -> Researcher -> Critic -> Researcher when evidence is missing -> Writer
+Planner + Supplier Resolver
+  resolved -> Researcher -> Critic -> 按缺失维度继续研究 -> Writer
+  unresolved / ambiguous -> Writer(insufficient_evidence)
 ```
 
-The procurement domain pack defines research dimensions, allowed tools, report sections, source priority, and HITL policy. The core graph is domain-independent enough to support later investment or academic research packs.
+详细结构见 [docs/architecture.md](docs/architecture.md)。后置评估范围见 [docs/eval-plan.md](docs/eval-plan.md)。
 
-## Roadmap
+## 测试
 
-- Add BM25 + vector hybrid retrieval with alpha tuning.
-- Add Qdrant and reranker support.
-- Extract procurement tools into an MCP server.
-- Add LangSmith trace and local trace export.
-- Add golden supplier cases and trajectory evaluation.
+```powershell
+.\.conda-env\python.exe -m pytest -q
+```
+
+测试覆盖状态模型、Domain Pack、数据加载、供应商识别、采购工具、本地检索、Agent 节点、LangGraph 路由、API 和 CLI。
