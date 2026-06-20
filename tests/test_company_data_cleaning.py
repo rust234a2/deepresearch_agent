@@ -1,7 +1,14 @@
+import csv
+import re
+from zipfile import ZIP_DEFLATED, ZipFile
+
+from openpyxl import Workbook
+
 from deepresearch_agent.company_data_cleaning import (
     clean_rows,
     parse_business_term,
     parse_capital,
+    run_cleaning,
     split_values,
 )
 
@@ -88,3 +95,59 @@ def test_clean_rows_separates_matched_and_rejected_records():
             "reason": "unmatched",
         }
     ]
+
+
+def test_run_cleaning_writes_three_csv_files(tmp_path):
+    workbook_path = tmp_path / "source.xlsx"
+    output_dir = tmp_path / "cleaned"
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(["数据使用声明"])
+    worksheet.append(
+        [
+            "原文件导入名称",
+            "系统匹配企业名称",
+            "登记状态",
+            "统一社会信用代码",
+            "注册资本",
+            "电话",
+        ]
+    )
+    worksheet.append(
+        ["示例科技", "示例科技股份有限公司", "存续", "91330000123456789X", "100万元", "123"]
+    )
+    worksheet.append(["未匹配公司", "未匹配到相关企业", "-", "-", "-", "-"])
+    workbook.save(workbook_path)
+
+    summary = run_cleaning(workbook_path, output_dir)
+
+    assert summary == {"input_rows": 2, "companies": 1, "contacts": 1, "rejected": 1}
+    for file_name in ("companies.csv", "contacts.csv", "rejected.csv"):
+        assert (output_dir / file_name).exists()
+    with (output_dir / "companies.csv").open(encoding="utf-8-sig", newline="") as handle:
+        companies = list(csv.DictReader(handle))
+    assert companies[0]["legal_name"] == "示例科技股份有限公司"
+
+
+def test_run_cleaning_handles_incorrect_workbook_dimension(tmp_path):
+    workbook_path = tmp_path / "source.xlsx"
+    rewritten_path = tmp_path / "rewritten.xlsx"
+    output_dir = tmp_path / "cleaned"
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(["数据使用声明"])
+    worksheet.append(["原文件导入名称", "系统匹配企业名称", "统一社会信用代码"])
+    worksheet.append(["示例科技", "示例科技股份有限公司", "91330000123456789X"])
+    workbook.save(workbook_path)
+
+    with ZipFile(workbook_path) as source, ZipFile(rewritten_path, "w", ZIP_DEFLATED) as target:
+        for item in source.infolist():
+            content = source.read(item.filename)
+            if item.filename == "xl/worksheets/sheet1.xml":
+                content = re.sub(br'<dimension ref="[^"]+"\s*/>', b'<dimension ref="A1"/>', content)
+            target.writestr(item, content)
+
+    summary = run_cleaning(rewritten_path, output_dir)
+
+    assert summary["input_rows"] == 1
+    assert summary["companies"] == 1

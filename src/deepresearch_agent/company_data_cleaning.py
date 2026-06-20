@@ -245,6 +245,8 @@ def read_workbook_rows(path: str | Path) -> list[dict]:
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
         worksheet = workbook.active
+        if worksheet.calculate_dimension() == "A1:A1":
+            worksheet.reset_dimensions()
         headers = [normalize_missing(cell.value) for cell in worksheet[2]]
         rows: list[dict] = []
         for values in worksheet.iter_rows(min_row=3, values_only=True):
@@ -263,6 +265,21 @@ def write_csv(rows: Iterable[dict], columns: list[str], path: str | Path) -> Non
         writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def run_cleaning(input_path: str | Path, output_dir: str | Path) -> dict[str, int]:
+    rows = read_workbook_rows(input_path)
+    companies, contacts, rejected = clean_rows(rows)
+    output = Path(output_dir)
+    write_csv(companies, CORE_COLUMNS, output / "companies.csv")
+    write_csv(contacts, CONTACT_COLUMNS, output / "contacts.csv")
+    write_csv(rejected, REJECTED_COLUMNS, output / "rejected.csv")
+    return {
+        "input_rows": len(rows),
+        "companies": len(companies),
+        "contacts": len(contacts),
+        "rejected": len(rejected),
+    }
 
 
 def _digits(value: object) -> str:

@@ -9,3 +9,5 @@ dist/
 build/
 *.egg-info/
 .external_repos/
+data/procurement/candidates/*.xlsx
+data/procurement/cleaned/
