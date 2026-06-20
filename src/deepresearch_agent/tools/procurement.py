@@ -8,7 +8,6 @@ def _extract_supplier_profile(args: dict) -> dict:
     supplier = find_supplier_profile(args["supplier_name"])
     return {
         "supplier_name": supplier.company.legal_name,
-        "country": supplier.company.country,
         "products": supplier.capability.products,
         "certifications": supplier.compliance.certifications,
         "delivery_capacity": supplier.capability.delivery_capacity,

@@ -9,6 +9,7 @@ def test_supplier_profile_tool_returns_structured_result():
     assert result.name == "extract_supplier_profile"
     assert result.status == "ok"
     assert result.data["supplier_name"] == "ACME Sensors"
+    assert "country" not in result.data
     assert result.permission_tier == "read_public"
 
 

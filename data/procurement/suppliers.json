@@ -2,7 +2,6 @@
   {
     "supplier_name": "ACME Sensors",
     "aliases": ["ACME", "ACME Sensors Ltd.", "艾克米传感器"],
-    "country": "Malaysia",
     "products": ["industrial temperature sensor", "pressure sensor"],
     "certifications": ["ISO 9001", "RoHS"],
     "delivery_capacity": "Two manufacturing sites; stated monthly capacity of 120000 sensor units.",
@@ -13,7 +12,6 @@
   {
     "supplier_name": "Northstar Components",
     "aliases": ["Northstar", "Northstar Components Ltd.", "北极星组件"],
-    "country": "Unknown",
     "products": ["control module"],
     "certifications": [],
     "delivery_capacity": "Capacity not disclosed.",

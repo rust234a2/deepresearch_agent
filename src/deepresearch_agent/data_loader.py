@@ -36,7 +36,6 @@ def _supplier_from_fixture(item: dict) -> SupplierDueDiligenceProfile:
     return SupplierDueDiligenceProfile(
         company=CompanyProfile(
             legal_name=item["supplier_name"],
-            country=item["country"],
             aliases=item.get("aliases", []),
         ),
         capability=SupplierCapability(

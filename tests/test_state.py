@@ -75,7 +75,6 @@ def test_supplier_due_diligence_profile_models_procurement_company_data():
     profile = SupplierDueDiligenceProfile(
         company=CompanyProfile(
             legal_name="ACME Sensors",
-            country="Malaysia",
             registration_id="MY-ACME-001",
             website="https://example.com/acme",
         ),
@@ -99,6 +98,7 @@ def test_supplier_due_diligence_profile_models_procurement_company_data():
     )
 
     assert profile.company.legal_name == "ACME Sensors"
+    assert "country" not in profile.company.model_dump()
     assert profile.capability.monthly_capacity_units == 120000
     assert profile.compliance.certifications == ["ISO 9001", "RoHS"]
     assert profile.procurement_history.on_time_delivery_rate == 0.97
@@ -106,7 +106,7 @@ def test_supplier_due_diligence_profile_models_procurement_company_data():
 
 def test_supplier_due_diligence_profile_allows_missing_v1_data():
     profile = SupplierDueDiligenceProfile(
-        company=CompanyProfile(legal_name="Private Supplier", country="China"),
+        company=CompanyProfile(legal_name="Private Supplier"),
         capability=SupplierCapability(products=["control module"]),
         compliance=ComplianceProfile(),
     )

@@ -18,7 +18,6 @@ class SupplierResolution(BaseModel):
 
 class CompanyProfile(BaseModel):
     legal_name: str
-    country: str
     registration_id: str | None = None
     aliases: list[str] = Field(default_factory=list)
     registered_address: str | None = None

@@ -9,7 +9,7 @@ def test_load_supplier_profiles_from_fixture():
     acme = profiles[0]
     assert acme.company.legal_name == "ACME Sensors"
     assert "艾克米传感器" in acme.company.aliases
-    assert acme.company.country == "Malaysia"
+    assert "country" not in acme.company.model_dump()
     assert acme.capability.products == ["industrial temperature sensor", "pressure sensor"]
     assert acme.capability.monthly_capacity_units == 120000
     assert acme.compliance.certifications == ["ISO 9001", "RoHS"]
