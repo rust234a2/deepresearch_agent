@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
+
+
+PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
+if str(PROJECT_SRC) not in sys.path:
+    sys.path.insert(0, str(PROJECT_SRC))
 
 from deepresearch_agent.company_data_cleaning import run_cleaning
 
@@ -12,7 +18,7 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("data/procurement/cleaned"),
+        default=Path("data/procurement/processed"),
     )
     args = parser.parse_args()
     if args.input.suffix.casefold() != ".xlsx":

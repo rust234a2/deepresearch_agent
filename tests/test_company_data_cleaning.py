@@ -1,5 +1,8 @@
 import csv
 import re
+import subprocess
+import sys
+from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from openpyxl import Workbook
@@ -157,3 +160,44 @@ def test_run_cleaning_handles_incorrect_workbook_dimension(tmp_path):
 
     assert summary["input_rows"] == 1
     assert summary["companies"] == 1
+
+
+def test_cleaning_script_uses_project_source_when_run_from_other_directory(tmp_path):
+    project_root = Path(__file__).parents[1]
+    workbook_path = tmp_path / "source.xlsx"
+    output_dir = tmp_path / "output"
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.append(["数据使用声明"])
+    worksheet.append(
+        [
+            "原文件导入名称",
+            "系统匹配企业名称",
+            "统一社会信用代码",
+            "营业期限",
+        ]
+    )
+    worksheet.append(
+        ["示例科技", "示例科技股份有限公司", "91330000123456789X", "*** 至 无固定期限"]
+    )
+    workbook.save(workbook_path)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(project_root / "scripts" / "clean_qcc_company_data.py"),
+            "--input",
+            str(workbook_path),
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    with (output_dir / "companies.csv").open(encoding="utf-8-sig", newline="") as handle:
+        company = next(csv.DictReader(handle))
+    assert company["business_term_start"] == ""
