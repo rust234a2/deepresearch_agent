@@ -153,13 +153,13 @@ Repository 输出模型时把电话和邮箱拆为列表。
 
 ```python
 get_by_credit_code(code: str) -> CompanyRecord | None
-resolve_name(name: str) -> CompanyResolution
+resolve_text(text: str) -> CompanyResolution
 get_contact(code: str) -> CompanyContact | None
 ```
 
 `CompanyRecord` 组合 `CompanyProfile` 和可选 `CompanyContact`。名称规范化使用 NFKC、大小写折叠和空白折叠，与导入阶段保持一致。
 
-`resolve_name` 的结果只有三种：
+`resolve_text` 接收完整研究问题，在规范化文本中确定性匹配全部法定名称和曾用名；英文名称使用字母数字边界，中文名称使用子串匹配。同一家企业命中多个名称时优先保留最长名称，法定名称在同长度下优先。结果只有三种：
 
 - `resolved`：法定名称或别名唯一命中。
 - `ambiguous`：同一规范化名称命中多家企业。
@@ -169,7 +169,7 @@ get_contact(code: str) -> CompanyContact | None
 
 ### 供应商识别
 
-`supplier_resolution.py` 改为使用 `CompanyRepository.resolve_name`，不再加载 `suppliers.json`。解析范围从两家演示供应商扩展到 SQLite 中全部企业。
+`supplier_resolution.py` 改为使用 `CompanyRepository.resolve_text`，不再加载 `suppliers.json`。解析范围从两家演示供应商扩展到 SQLite 中全部企业。
 
 ### 工具
 
