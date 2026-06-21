@@ -1,45 +1,56 @@
+from pathlib import Path
+
+from deepresearch_agent.company_database import build_company_database
+from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.tools.procurement import build_procurement_tool_registry
 
 
-def test_supplier_profile_tool_returns_structured_result():
-    registry = build_procurement_tool_registry()
+FIXTURES = Path(__file__).parent / "fixtures" / "procurement"
 
-    result = registry.run("extract_supplier_profile", {"supplier_name": "ACME Sensors"})
 
-    assert result.name == "extract_supplier_profile"
+def _registry(tmp_path: Path):
+    database_path = tmp_path / "companies.sqlite3"
+    build_company_database(
+        FIXTURES / "companies.csv",
+        FIXTURES / "contacts.csv",
+        database_path,
+    )
+    return build_procurement_tool_registry(CompanyRepository(database_path))
+
+
+def test_company_profile_tool_returns_only_source_backed_fields(tmp_path):
+    registry = _registry(tmp_path)
+
+    result = registry.run(
+        "get_company_profile",
+        {"credit_code": "91330000123456789X"},
+    )
+
     assert result.status == "ok"
-    assert result.data["supplier_name"] == "ACME Sensors"
-    assert "country" not in result.data
-    assert result.permission_tier == "read_public"
+    assert result.data["legal_name"] == "示例科技股份有限公司"
+    assert result.data["business_scope"] == "工业设备制造；工业设备销售。"
+    assert "products" not in result.data
+    assert "certifications" not in result.data
+    assert result.permission_tier == "read_private"
 
 
-def test_sanctions_tool_flags_known_risk_supplier():
-    registry = build_procurement_tool_registry()
+def test_company_contact_tool_returns_source_backed_contact(tmp_path):
+    registry = _registry(tmp_path)
 
-    result = registry.run("check_sanctions_or_blacklist", {"company_name": "Northstar Components"})
+    result = registry.run(
+        "get_company_contact",
+        {"credit_code": "91330000123456789X"},
+    )
 
     assert result.status == "ok"
-    assert result.data["listed"] is True
-    assert "export restriction" in result.data["reason"].lower()
+    assert result.data["phones"] == ["0571-12345678", "400-123-4567"]
+    assert result.data["emails"] == ["info@example.cn", "sales@example.cn"]
 
 
-def test_unknown_tool_raises_key_error():
-    registry = build_procurement_tool_registry()
+def test_unknown_company_returns_structured_tool_error(tmp_path):
+    registry = _registry(tmp_path)
 
-    try:
-        registry.run("missing_tool", {})
-    except KeyError as exc:
-        assert "missing_tool" in str(exc)
-    else:
-        raise AssertionError("missing tool should raise KeyError")
-
-
-def test_unknown_supplier_returns_structured_tool_error():
-    registry = build_procurement_tool_registry()
-
-    result = registry.run("extract_supplier_profile", {"supplier_name": "Missing Supplier"})
+    result = registry.run("get_company_profile", {"credit_code": "missing"})
 
     assert result.status == "error"
-    assert "Unknown supplier" in result.data["error"]
-    assert result.permission_tier == "read_public"
-    assert result.latency_ms >= 0
+    assert "Unknown company credit code" in result.data["error"]
