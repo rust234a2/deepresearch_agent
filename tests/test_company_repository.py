@@ -1,0 +1,100 @@
+import csv
+import sqlite3
+from pathlib import Path
+
+import pytest
+
+from deepresearch_agent.company_data_cleaning import CORE_COLUMNS
+from deepresearch_agent.company_database import build_company_database
+from deepresearch_agent.company_repository import CompanyRepository
+
+
+FIXTURES = Path(__file__).parent / "fixtures" / "procurement"
+
+
+def _build_database(tmp_path: Path) -> Path:
+    database_path = tmp_path / "companies.sqlite3"
+    build_company_database(
+        FIXTURES / "companies.csv",
+        FIXTURES / "contacts.csv",
+        database_path,
+    )
+    return database_path
+
+
+def test_repository_returns_profile_aliases_and_contact(tmp_path):
+    repository = CompanyRepository(_build_database(tmp_path))
+
+    record = repository.get_by_credit_code("91330000123456789X")
+
+    assert record is not None
+    assert record.profile.legal_name == "示例科技股份有限公司"
+    assert record.profile.business_scope == "工业设备制造；工业设备销售。"
+    assert record.profile.aliases == ["示例机械有限公司", "示例设备有限公司"]
+    assert record.contact is not None
+    assert record.contact.phones == ["0571-12345678", "400-123-4567"]
+
+
+def test_repository_resolves_legal_name_and_alias_from_question(tmp_path):
+    repository = CompanyRepository(_build_database(tmp_path))
+
+    legal_name = repository.resolve_text("请核验示例科技股份有限公司的工商信息")
+    alias = repository.resolve_text("请核验示例设备有限公司的工商信息")
+
+    assert legal_name.status == "resolved"
+    assert legal_name.match_type == "legal_name"
+    assert legal_name.unified_social_credit_code == "91330000123456789X"
+    assert alias.status == "resolved"
+    assert alias.match_type == "alias"
+    assert alias.matched_text == "示例设备有限公司"
+
+
+def test_repository_returns_not_found_for_unknown_question(tmp_path):
+    repository = CompanyRepository(_build_database(tmp_path))
+
+    result = repository.resolve_text("请核验不存在公司")
+
+    assert result.status == "not_found"
+    assert result.candidates == []
+
+
+def test_repository_reports_shared_alias_as_ambiguous(tmp_path):
+    with (FIXTURES / "companies.csv").open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    second = dict(rows[0])
+    second["source_name"] = "第二科技"
+    second["legal_name"] = "第二科技股份有限公司"
+    second["unified_social_credit_code"] = "911100001111111111"
+    second["aliases"] = "示例设备有限公司"
+    companies_path = tmp_path / "companies.csv"
+    with companies_path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CORE_COLUMNS)
+        writer.writeheader()
+        writer.writerows([rows[0], second])
+    database_path = tmp_path / "companies.sqlite3"
+    build_company_database(companies_path, FIXTURES / "contacts.csv", database_path)
+
+    result = CompanyRepository(database_path).resolve_text("比较示例设备有限公司")
+
+    assert result.status == "ambiguous"
+    assert [item.legal_name for item in result.candidates] == [
+        "示例科技股份有限公司",
+        "第二科技股份有限公司",
+    ]
+
+
+def test_repository_rejects_missing_database(tmp_path):
+    repository = CompanyRepository(tmp_path / "missing.sqlite3")
+
+    with pytest.raises(FileNotFoundError, match="build_company_database.py"):
+        repository.resolve_text("示例科技股份有限公司")
+
+
+def test_repository_rejects_unsupported_schema_version(tmp_path):
+    database_path = _build_database(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA user_version = 2")
+    repository = CompanyRepository(database_path)
+
+    with pytest.raises(RuntimeError, match="expected 1"):
+        repository.resolve_text("示例科技股份有限公司")
