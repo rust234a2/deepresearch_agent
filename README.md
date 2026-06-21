@@ -1,38 +1,63 @@
 # DeepResearch Agent
 
-基于 LangGraph 的采购供应商尽调 Agent。当前 v1 使用本地预设供应商数据和 Markdown 文档，完成供应商识别、研究规划、证据收集、缺口检查和带引用报告生成。
+基于 LangGraph 的中国制造业供应商工商研究 Agent。当前版本以企查查导出的清洗 CSV 为事实标准，使用本地 SQLite 完成企业识别、工商证据收集、缺口检查和带引用报告生成。
 
 ## 当前范围
 
-- 支持 `ACME Sensors` 和 `Northstar Components`，以及预设别名。
-- Domain Pack 驱动研究维度、工具白名单和 HITL 规则。
-- 供应商名称无法识别或同时命中多个供应商时，返回 `insufficient_evidence`，不会猜测实体。
-- 数据全部来自 `data/procurement/`，当前不接实时 API、网页爬取、数据库、Qdrant、GraphRAG 或 MCP。
-- RAGAS、Phoenix 和 golden case 评估已后置，待可用版稳定后实施。
+- 支持 SQLite 中全部企业的法定名称、曾用名和统一社会信用代码。
+- 返回登记状态、法人、资本、成立日期、地址、国标行业、企业规模、经营范围和联系方式。
+- 经营范围按数据源原文返回，不推断结构化产品、产能、交期或认证。
+- 当前没有制裁、司法、新闻、财务和采购履约数据，因此报告固定使用 `insufficient_evidence`，不会据工商数据作出采购批准或风险结论。
+- 不接实时 API、网页爬虫、Qdrant、GraphRAG 或 MCP。
 
-## 安装
+## 数据流
+
+```text
+data/procurement/raw/*.xlsx
+  -> 清洗
+data/procurement/processed/companies.csv
+data/procurement/processed/contacts.csv
+  -> SQLite 构建器
+data/procurement/derived/companies.sqlite3
+  -> CompanyRepository -> Agent
+```
+
+`raw/`、`processed/` 和 `derived/` 都是本地数据目录，不提交 Git。测试使用 `tests/fixtures/procurement/` 中的合成数据。
+
+## 安装和测试
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
+python -m pytest -q
 ```
 
-本工作区已有 conda 环境时，可直接使用：
+本工作区已有 conda 环境时：
 
 ```powershell
 .\.conda-env\python.exe -m pytest -q
 ```
 
+## 清洗与构建数据库
+
+```powershell
+.\.conda-env\python.exe scripts/clean_qcc_company_data.py `
+  --input data/procurement/raw/<企查查导出文件>.xlsx `
+  --output-dir data/procurement/processed
+
+.\.conda-env\python.exe scripts/build_company_database.py
+```
+
+数据库构建器校验 CSV 表头、信用代码唯一性和联系方式关联，成功后原子替换 `data/procurement/derived/companies.sqlite3`。
+
 ## CLI
 
 ```powershell
-.\.conda-env\python.exe -m deepresearch_agent.cli "Assess ACME Sensors for industrial sensor procurement"
-.\.conda-env\python.exe -m deepresearch_agent.cli "Assess Northstar Components for control module procurement"
-.\.conda-env\python.exe -m deepresearch_agent.cli "Assess Missing Supplier"
+.\.conda-env\python.exe -m deepresearch_agent.cli `
+  "核验万马科技股份有限公司的工商和经营范围" `
+  --database data/procurement/derived/companies.sqlite3
 ```
-
-也可以在安装项目后使用 `deepresearch` 命令。
 
 ## API
 
@@ -40,29 +65,11 @@ pip install -e ".[dev]"
 .\.conda-env\python.exe -m uvicorn deepresearch_agent.api:app --reload
 ```
 
-请求示例：
-
 ```powershell
 Invoke-RestMethod -Method Post `
   -Uri http://127.0.0.1:8000/research `
   -ContentType "application/json" `
-  -Body '{"question":"Assess ACME Sensors for industrial sensor procurement"}'
+  -Body '{"question":"核验万马科技股份有限公司的工商和经营范围"}'
 ```
 
-## 核心流程
-
-```text
-Planner + Supplier Resolver
-  resolved -> Researcher -> Critic -> 按缺失维度继续研究 -> Writer
-  unresolved / ambiguous -> Writer(insufficient_evidence)
-```
-
-详细结构见 [docs/architecture.md](docs/architecture.md)。后置评估范围见 [docs/eval-plan.md](docs/eval-plan.md)。
-
-## 测试
-
-```powershell
-.\.conda-env\python.exe -m pytest -q
-```
-
-测试覆盖状态模型、Domain Pack、数据加载、供应商识别、采购工具、本地检索、Agent 节点、LangGraph 路由、API 和 CLI。
+详细结构见 [docs/architecture.md](docs/architecture.md)。

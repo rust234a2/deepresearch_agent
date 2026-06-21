@@ -11,9 +11,14 @@ from deepresearch_agent.agents.graph import run_research
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Run a procurement DeepResearch supplier assessment.")
     parser.add_argument("question", help="Research question, including a known supplier name.")
+    parser.add_argument(
+        "--database",
+        default="data/procurement/derived/companies.sqlite3",
+        help="Path to the generated SQLite company database.",
+    )
     args = parser.parse_args(argv)
 
-    state = run_research(args.question)
+    state = run_research(args.question, database_path=args.database)
     if state.report is None:
         raise SystemExit("Research finished without a report.")
 

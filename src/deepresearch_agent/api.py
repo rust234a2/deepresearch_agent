@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI
 from pydantic import BaseModel, StringConstraints
 
-from deepresearch_agent.agents.graph import run_research
+from deepresearch_agent.agents.graph import DEFAULT_DATABASE_PATH, run_research
 from deepresearch_agent.state import SupplierReport
 
 
@@ -17,12 +18,21 @@ class ResearchRequest(BaseModel):
     domain: str = "procurement"
 
 
-app = FastAPI(title="DeepResearch Agent", version="0.1.0")
+def create_app(database_path: str | Path = DEFAULT_DATABASE_PATH) -> FastAPI:
+    application = FastAPI(title="DeepResearch Agent", version="0.1.0")
+
+    @application.post("/research", response_model=SupplierReport)
+    def research(request: ResearchRequest) -> SupplierReport:
+        state = run_research(
+            request.question,
+            domain=request.domain,
+            database_path=database_path,
+        )
+        if state.report is None:
+            raise RuntimeError("research graph completed without a report")
+        return state.report
+
+    return application
 
 
-@app.post("/research", response_model=SupplierReport)
-def research(request: ResearchRequest) -> SupplierReport:
-    state = run_research(request.question, domain=request.domain)
-    if state.report is None:
-        raise RuntimeError("research graph completed without a report")
-    return state.report
+app = create_app()

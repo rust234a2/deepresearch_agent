@@ -483,13 +483,13 @@ def build_procurement_tool_registry(repository: CompanyRepository) -> ToolRegist
     registry.register(RegisteredTool(
         name="get_company_profile",
         description="Return source-backed Chinese company registration data.",
-        permission_tier="read_local",
+        permission_tier="read_private",
         handler=get_profile,
     ))
     registry.register(RegisteredTool(
         name="get_company_contact",
         description="Return source-backed company contact data.",
-        permission_tier="read_local",
+        permission_tier="read_private",
         handler=get_contact,
     ))
     return registry
