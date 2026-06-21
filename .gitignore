@@ -11,4 +11,6 @@ build/
 .external_repos/
 .worktrees/
 data/procurement/candidates/*.xlsx
-data/procurement/cleaned/
+data/procurement/raw/
+data/procurement/processed/
+data/procurement/derived/
