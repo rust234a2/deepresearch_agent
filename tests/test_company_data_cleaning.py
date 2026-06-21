@@ -6,11 +6,17 @@ from openpyxl import Workbook
 
 from deepresearch_agent.company_data_cleaning import (
     clean_rows,
+    normalize_missing,
     parse_business_term,
     parse_capital,
     run_cleaning,
     split_values,
 )
+
+
+def test_normalize_missing_treats_masked_value_as_missing_but_preserves_embedded_separator():
+    assert normalize_missing("***") == ""
+    assert normalize_missing("许可项目***一般项目") == "许可项目***一般项目"
 
 
 def test_parse_capital_converts_ten_thousand_yuan():

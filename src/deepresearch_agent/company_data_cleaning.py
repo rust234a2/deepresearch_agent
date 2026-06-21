@@ -64,7 +64,7 @@ def normalize_missing(value: object) -> str:
     if value is None:
         return ""
     text = " ".join(str(value).replace("\r", "\n").split())
-    if text.casefold() in MISSING_VALUES:
+    if text.casefold() in MISSING_VALUES or (text and set(text) == {"*"}):
         return ""
     return text
 
