@@ -1,93 +1,72 @@
 # 项目记忆
 
-更新时间：2026-06-20
+更新时间：2026-06-21
 
-本文件记录当前对话中已经确认的需求、工程决策和项目状态，供后续会话继续工作。开始新任务前应先阅读本文件，并以用户最新指令为准。
+本文件记录已经确认的工程决策和项目状态。后续会话开始前应先阅读本文件，并以用户最新指令为准。
 
 ## 用户协作偏好
 
 - 全程使用中文沟通。
-- 每完成一个模块都要提交 Git，提交信息使用中文。
-- 用户已允许直接在 `master` 分支工作。
-- 用户希望按模块持续完成项目，不停留在方案层；但遇到明确中断时应停止旧任务，以最新请求为准。
+- 每完成一个模块提交 Git，提交信息使用中文。
+- 用户允许直接在 `master` 工作；SQLite 企业数据层当前在隔离分支 `feature/sqlite-company-data` 实施。
 - 不覆盖或回退用户未提交的文件修改。
 
-## 当前项目目标
+## 当前目标和数据原则
 
-构建面向中国制造业供应商尽调的 DeepResearch Agent。
+项目面向中国制造业供应商工商研究。企查查清洗 CSV 是企业事实标准，SQLite 是可重复生成的查询产物，Agent 只陈述数据源实际提供的字段。
 
-当前范围：
-
-- 只处理中国企业，因此正式企业模型已删除国家字段。
-- 先使用本地预设和人工收集的数据，不接实时 API、网页爬虫、Qdrant、GraphRAG 或 MCP。
-- RAGAS 计划用于后续 RAG 质量评估，Phoenix 计划用于后续轨迹调试。
-- Golden cases 和正式评估层后置。
+当前不使用实时 API、网页爬虫、Qdrant、GraphRAG 或 MCP。RAGAS、Phoenix、golden cases 和正式评估层后置。
 
 ## 已完成模块
 
 1. FastAPI 和 CLI 入口。
 2. LangGraph Planner、Researcher、Critic、Writer 编排循环。
-3. Domain Pack 驱动研究维度、工具白名单和 HITL 规则。
-4. 供应商预设数据模型、加载器和采购工具。
-5. 本地供应商文档检索及供应商范围隔离。
-6. 法定名称与别名确定性识别，支持未知和歧义输入。
-7. 报告证据去重、工具轨迹去重和错误处理。
-8. 中国制造业供应商候选名单生成器。
-9. 企查查工商数据清洗器和命令行脚本。
-10. 正式供应商模型、fixture 和工具输出中的国家字段已经删除。
+3. Domain Pack 工具白名单和研究维度。
+4. 中国制造业候选名单生成器，3509 家企业、15 个行业。
+5. 企查查 Excel 清洗器，输出企业、联系方式和拒绝记录。
+6. 以清洗字段为标准的 `CompanyProfile` 和 `CompanyContact` 强类型模型。
+7. SQLite schema version 1 和原子数据库构建器。
+8. 只读 `CompanyRepository`，支持信用代码、法定名称和曾用名查询以及歧义结果。
+9. `get_company_profile` 和 `get_company_contact` 两个私有数据工具。
+10. 基于六个工商维度的 Agent 证据生成路径。
+11. 旧能力、合规、财务、采购历史组合模型和两家英文演示供应商已删除。
 
-最近相关提交：
-
-```text
-43ef172 重构：移除供应商国家字段
-049dc33 功能：增加企查查数据清洗命令
-750de3f 功能：增加企业工商数据清洗器
-4d8ab16 数据：增加中国制造业供应商候选名单
-8a81a4c 修复：提高候选企业行业分类准确性
-8364ef8 功能：增加候选企业名单生成脚本
-6727b8d 功能：增加制造业候选企业分类器
-95ba939 文档：同步采购尽调 v1 架构与使用说明
-```
-
-## 数据状态
-
-### 候选名单
-
-路径：
+SQLite 企业数据层相关提交：
 
 ```text
-data/procurement/candidates/china_manufacturing_supplier_names.csv
+d65a94f 重构：以工商数据源重建企业模型
+14d46ab 功能：增加SQLite企业数据库构建器
+3a562a5 功能：增加只读企业Repository
+bd7a387 功能：增加企业数据库构建命令
+1620af9 重构：让企业识别和工具使用SQLite
+72d4e82 重构：让研究图基于工商数据生成证据
+ad5982a 文档：切换到SQLite企业数据运行路径
 ```
 
-最初生成 3509 家中国制造业企业，覆盖 15 个行业。
+## 本地数据状态
 
-CSV 表头 `supplier_name,industry` 已恢复，常规 CSV 读取可得到完整的 3509 条候选企业；测试会校验仓库内候选 CSV 的表头，防止同类问题再次出现。
-
-### 企查查原始数据
-
-原始 Excel 位于 `data/procurement/candidates/`，包含 3509 条输入。原始文件带有使用和再分发限制，已通过 `.gitignore` 排除，不得提交到公开 Git。
-
-### 清洗结果
-
-路径：
+目录：
 
 ```text
-data/procurement/cleaned/companies.csv
-data/procurement/cleaned/contacts.csv
-data/procurement/cleaned/rejected.csv
+data/procurement/raw/          企查查原始 Excel，Git 忽略
+data/procurement/processed/    companies.csv / contacts.csv / rejected.csv，Git 忽略
+data/procurement/derived/      companies.sqlite3，Git 忽略
+tests/fixtures/procurement/    可提交的合成测试数据
 ```
 
-结果：
+最新清洗和构建结果：
 
-- 核心企业：3506 条。
+- 原始输入：3509 条。
+- 企业：3506 条。
 - 联系方式：3506 条。
 - 未匹配：3 条。
-- 统一社会信用代码重复：0。
-- 注册资本解析失败：0。
+- SQLite 信用代码主键无重复。
+- 万马科技可通过法定名称、信用代码和曾用名查询。
+- 万马科技经营范围原文长度为 623 字。
 
-清洗结果同样被 Git 忽略，只用于本地项目。
+清洗器已把字段值完全由星号组成的脱敏占位符视为缺失值，但保留经营范围内部的 `***` 分隔符。
 
-未匹配企业：
+未匹配企业仍为：
 
 ```text
 厦门建霖智慧家居股份有限公司
@@ -95,74 +74,59 @@ data/procurement/cleaned/rejected.csv
 山东（原文件名称存在乱码）橡塑科技股份有限公司
 ```
 
-## 当前数据结构缺口
+## 正式模型和数据库
 
-- `CompanyProfile` 仍只覆盖少量基础字段，尚未承接法定代表人、资本、成立日期、国标行业、企业规模、经营范围和年报字段。
-- `data_loader.py` 仍只加载 `data/procurement/suppliers.json` 中两家演示供应商，3506 家清洗企业尚未接入 Agent。
-- 当前 `LocalDocumentRetriever` 仅使用英文字符正则，不能有效检索中文经营范围。
-- 尚未建立 SQLite 企业索引、别名索引或中文 BM25 索引。
-- 演示 fixture、原始数据、清洗数据和未来索引产物尚未按 `fixtures/raw/staging/processed/derived` 完整重组。
+`CompanyProfile` 覆盖法定名称、信用代码、登记状态、法人、企业类型、注册/实缴资本、成立和营业期限、地址、省市区、登记机关、国标行业、企业规模、完整经营范围、曾用名、英文名、官网、参保人数、年报年份和纳税人资质。
 
-## 已确认但尚未实施的分块方案
+SQLite 表：
 
-用户已同意先讨论经营范围分块，但上一轮“实行”请求被主动中断，因此当前没有分块代码或数据产物。
+- `companies`
+- `company_aliases`
+- `company_contacts`
+- `import_metadata`
 
-经营范围实际分布：
+索引覆盖规范化法定名称、别名、登记状态、省市、国标行业大类和企业规模。运行时使用只读连接，schema 版本不匹配时要求重建。
 
-```text
-总数：3506
-长度中位数：235 字
-P90：513 字
-P95：629 字
-最大：1490 字
-包含分号条款：3153 条
-```
+## Agent 当前能力边界
 
-拟采用条款感知动态分块：
-
-- 不超过 600 字时保持单块。
-- 超过 600 字时按 `；`、`;`、`。` 和编号条款切分。
-- 目标 400 至 500 字，最小 200 字，最大 650 字。
-- 超长单条款再按中文逗号切分，最后才进行硬切。
-- 相邻块最多重叠一个完整条款，重叠不超过 80 字。
-- 只对 `business_scope` 及未来新闻、司法、公告等长文本分块。
-- 名称、信用代码、资本、状态、行业、地址和联系方式不分块。
-
-Chunk 中应区分：
+研究维度：
 
 ```text
-content      原始文本，用于引用
-search_text  企业名、行业和中文分词后的检索文本
-metadata     supplier_id、source_type、field_name、chunk_index 等
+company_identity
+registration
+capital
+industry_and_business_scope
+enterprise_scale
+contact
 ```
 
-不建议把每个分号条款独立成 chunk。产品、能力、活动等信息未来作为派生标签保存，不修改原始 `content`。
+经营范围按原文作为证据，不推断产品、产能、交期、认证或风险。当前没有制裁、司法、负面新闻、财务和采购履约数据，因此已解析企业的报告固定为 `insufficient_evidence`，不得写“未发现风险”。
 
-## 已讨论的索引方案
+## 尚未实施
 
-当前阶段建议：
+- 经营范围条款感知分块。
+- 中文分词和 SQLite FTS5/BM25。
+- 制裁、司法、新闻、财务和采购履约独立数据源。
+- RAGAS、Phoenix 和 golden cases。
+- 向量检索、GraphRAG、MCP 和 LangGraph checkpoint。
 
-- 统一社会信用代码唯一索引。
-- 法定名称规范化索引。
-- 别名独立表和别名索引。
-- 状态、省市、国标行业和企业规模结构化索引。
-- Chunk 表按企业 ID、来源类型和内容哈希建立索引。
-- 中文使用分词加 BM25；向量索引和 Qdrant 后置。
-
-## 建议的后续顺序
-
-1. 明确并实施 `fixtures/raw/staging/processed/derived` 数据目录。
-2. 扩展工商企业模型，并建立清洗 CSV 到模型的映射。
-3. 用 repository 边界替换只读两家 fixture 的硬编码 loader。
-4. 用户重新确认后，再实现经营范围分块。
-5. 建立企业结构化索引和中文 BM25 检索。
+建议下一阶段先实现经营范围分块和中文 FTS5/BM25，再引入其他数据源。
 
 ## 常用命令
 
 ```powershell
-.\.conda-env\python.exe -m pytest -q --basetemp=.pytest-tmp
-.\.conda-env\python.exe scripts/clean_qcc_company_data.py --input <xlsx> --output-dir data/procurement/cleaned
-.\.conda-env\python.exe scripts/generate_china_manufacturing_candidates.py --limit 5000
+.\.conda-env\python.exe scripts/clean_qcc_company_data.py `
+  --input data/procurement/raw/<企查查导出文件>.xlsx `
+  --output-dir data/procurement/processed
+
+.\.conda-env\python.exe scripts/build_company_database.py
+
+.\.conda-env\python.exe -m deepresearch_agent.cli `
+  "核验万马科技股份有限公司的工商和经营范围" `
+  --database data/procurement/derived/companies.sqlite3
+
+.\.conda-env\python.exe -m pytest -q -p no:cacheprovider `
+  --basetemp=.conda-cache/pytest-final
 ```
 
-最后一次完整验证：59 项测试通过。候选 CSV 表头问题已修复。
+最后一次完整验证：66 项测试通过。真实 SQLite 构建结果为 3506 家企业、3506 条联系方式。
