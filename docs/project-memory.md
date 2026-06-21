@@ -61,7 +61,7 @@ data/procurement/candidates/china_manufacturing_supplier_names.csv
 
 最初生成 3509 家中国制造业企业，覆盖 15 个行业。
 
-重要：当前该文件有用户未提交修改，表头 `supplier_name,industry` 已被删除，第一家公司被当作表头，常规 CSV 读取只得到 3508 条。不要直接覆盖；修复前应获得用户确认或明确保留用户后续编辑。
+CSV 表头 `supplier_name,industry` 已恢复，常规 CSV 读取可得到完整的 3509 条候选企业；测试会校验仓库内候选 CSV 的表头，防止同类问题再次出现。
 
 ### 企查查原始数据
 
@@ -151,12 +151,11 @@ metadata     supplier_id、source_type、field_name、chunk_index 等
 
 ## 建议的后续顺序
 
-1. 处理候选 CSV 表头丢失问题，但不要覆盖用户修改。
-2. 明确并实施 `fixtures/raw/staging/processed/derived` 数据目录。
-3. 扩展工商企业模型，并建立清洗 CSV 到模型的映射。
-4. 用 repository 边界替换只读两家 fixture 的硬编码 loader。
-5. 用户重新确认后，再实现经营范围分块。
-6. 建立企业结构化索引和中文 BM25 检索。
+1. 明确并实施 `fixtures/raw/staging/processed/derived` 数据目录。
+2. 扩展工商企业模型，并建立清洗 CSV 到模型的映射。
+3. 用 repository 边界替换只读两家 fixture 的硬编码 loader。
+4. 用户重新确认后，再实现经营范围分块。
+5. 建立企业结构化索引和中文 BM25 检索。
 
 ## 常用命令
 
@@ -166,4 +165,4 @@ metadata     supplier_id、source_type、field_name、chunk_index 等
 .\.conda-env\python.exe scripts/generate_china_manufacturing_candidates.py --limit 5000
 ```
 
-最后一次完整验证：58 项测试通过。工作区除用户修改的候选 CSV 外无其他未提交代码修改。
+最后一次完整验证：59 项测试通过。候选 CSV 表头问题已修复。

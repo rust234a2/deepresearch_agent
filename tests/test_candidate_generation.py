@@ -1,4 +1,5 @@
 import csv
+from pathlib import Path
 
 from deepresearch_agent.candidate_generation import (
     Candidate,
@@ -110,6 +111,22 @@ def test_write_candidates_csv_uses_expected_columns(tmp_path):
     with output.open(encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert rows == [{"supplier_name": "示例设备股份有限公司", "industry": "机械设备"}]
+
+
+def test_checked_in_candidate_csv_has_expected_header():
+    candidate_path = (
+        Path(__file__).parents[1]
+        / "data"
+        / "procurement"
+        / "candidates"
+        / "china_manufacturing_supplier_names.csv"
+    )
+
+    with candidate_path.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = reader.fieldnames
+
+    assert fieldnames == ["supplier_name", "industry"]
 
 
 def test_parse_source_page_keeps_only_active_china_mainland_listings():
