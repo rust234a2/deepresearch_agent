@@ -48,6 +48,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 3. 生成候选名单（独立工具脚本）
 .\.conda-env\python.exe scripts/generate_china_manufacturing_candidates.py
+
+# 4. 构建 FAISS 经营范围语义索引（需安装 .[rag] 可选依赖）
+.\.conda-env\python.exe scripts/build_scope_index.py
 ```
 
 运行 Agent：
@@ -60,6 +63,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # API（POST /research，body: {"question": "...", "domain": "procurement"}）
 .\.conda-env\python.exe -m uvicorn deepresearch_agent.api:app --reload
+```
+
+语义经营范围检索（跨企业按内容找企业，需 `.[rag]` 可选依赖与已构建的 FAISS 索引）：
+
+```powershell
+.\.conda-env\python.exe -m deepresearch_agent.rag.cli "注塑成型" `
+  --database data/procurement/derived/companies.sqlite3 `
+  --index data/procurement/derived/scope_index.faiss
 ```
 
 ## 架构
@@ -93,6 +104,6 @@ researcher 只调用 Domain Pack 白名单内的私有数据工具（`get_compan
 
 ## 注意点
 
-- `retrieval/local.py`（`LocalDocumentRetriever`，基于 `.md` 的关键词检索）目前**只被测试引用**，未接入 Agent 图。当前检索走 SQLite，不要误以为它在主路径上。
+- `rag/` 是语义经营范围检索子系统（切块 → bge-small-zh-v1.5 嵌入 → FAISS → `ScopeRetriever` → `search_company_scope` 工具 + CLI）。依赖 `.[rag]` 可选 extra；FAISS 索引由 `scripts/build_scope_index.py` 从 SQLite 重建。**尚未接入 planner→writer 主图**，仅作为独立工具与 CLI（端到端接入是后续工作）。旧的 `retrieval/local.py` 关键词检索器已删除。
 - `docs/architecture.md` 是架构事实标准；`docs/superpowers/` 下是历史 spec 和 plan。
 - 真实最新构建结果：3506 家企业、3506 条联系方式（参考量级，以 `import_metadata` 表为准）。

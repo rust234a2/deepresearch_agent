@@ -5,6 +5,7 @@ __pycache__/
 .conda-env/
 .conda-pkgs/
 .conda-cache/
+.pytest-tmp-*/
 dist/
 build/
 *.egg-info/
