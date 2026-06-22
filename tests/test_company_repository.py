@@ -83,6 +83,29 @@ def test_repository_reports_shared_alias_as_ambiguous(tmp_path):
     ]
 
 
+def test_repository_prefers_more_specific_name_over_substring(tmp_path):
+    with (FIXTURES / "companies.csv").open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    short = dict(rows[0])
+    short["source_name"] = "示例"
+    short["legal_name"] = "示例"
+    short["unified_social_credit_code"] = "911100002222222222"
+    short["aliases"] = ""
+    companies_path = tmp_path / "companies.csv"
+    with companies_path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CORE_COLUMNS)
+        writer.writeheader()
+        writer.writerows([rows[0], short])
+    database_path = tmp_path / "companies.sqlite3"
+    build_company_database(companies_path, FIXTURES / "contacts.csv", database_path)
+
+    result = CompanyRepository(database_path).resolve_text("核验示例科技股份有限公司的工商信息")
+
+    assert result.status == "resolved"
+    assert result.legal_name == "示例科技股份有限公司"
+    assert result.unified_social_credit_code == "91330000123456789X"
+
+
 def test_repository_rejects_missing_database(tmp_path):
     repository = CompanyRepository(tmp_path / "missing.sqlite3")
 

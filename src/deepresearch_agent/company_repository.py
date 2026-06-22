@@ -102,6 +102,9 @@ class CompanyRepository:
 
         if not matches:
             return CompanyResolution(status="not_found")
+
+        matches = _drop_dominated_matches(matches)
+
         if len(matches) > 1:
             candidates = sorted(
                 (
@@ -129,6 +132,31 @@ class CompanyRepository:
                 )
             ],
         )
+
+
+def _drop_dominated_matches(
+    matches: dict[str, tuple[str, str, str]],
+) -> dict[str, tuple[str, str, str]]:
+    """Drop matches whose matched text is a proper substring of another match's.
+
+    When a question contains a full legal name, a shorter company name that is a
+    substring of it also matches. The more specific (containing) name wins, so the
+    shorter, incidental match is not treated as a competing entity.
+    """
+    normalized = {
+        code: normalize_company_name(matched_text)
+        for code, (_, matched_text, _) in matches.items()
+    }
+    kept: dict[str, tuple[str, str, str]] = {}
+    for code, value in matches.items():
+        text = normalized[code]
+        if any(
+            other_code != code and text != other_text and text in other_text
+            for other_code, other_text in normalized.items()
+        ):
+            continue
+        kept[code] = value
+    return kept
 
 
 def _contains_name(text: str, candidate: str) -> bool:
