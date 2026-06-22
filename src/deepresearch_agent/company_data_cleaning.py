@@ -83,6 +83,8 @@ def parse_capital(value: object) -> tuple[str, str, str]:
         return "", "", original
     if "万" in original:
         amount *= Decimal(10000)
+    if "亿" in original:
+        amount *= Decimal(100000000)
 
     if "港元" in original or "港币" in original:
         currency = "HKD"

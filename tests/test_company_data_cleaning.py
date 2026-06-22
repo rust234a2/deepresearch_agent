@@ -26,6 +26,11 @@ def test_parse_capital_converts_ten_thousand_yuan():
     assert parse_capital("13,400万元") == ("134000000", "CNY", "13,400万元")
 
 
+def test_parse_capital_converts_hundred_million_yuan():
+    assert parse_capital("1亿元") == ("100000000", "CNY", "1亿元")
+    assert parse_capital("1.5亿元") == ("150000000", "CNY", "1.5亿元")
+
+
 def test_parse_capital_supports_foreign_currency():
     assert parse_capital("500万美元") == ("5000000", "USD", "500万美元")
 
