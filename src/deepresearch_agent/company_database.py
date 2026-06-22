@@ -12,9 +12,10 @@ from pydantic import ValidationError
 
 from deepresearch_agent.company_data_cleaning import CONTACT_COLUMNS, CORE_COLUMNS
 from deepresearch_agent.company_models import CompanyContact, CompanyProfile
+from deepresearch_agent.rag.chunking import chunk_business_scope
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -131,6 +132,7 @@ def _build_atomic_database(
             _create_schema(connection)
             _insert_companies(connection, companies)
             _insert_contacts(connection, contacts)
+            _insert_scope_chunks(connection, companies)
             connection.execute(
                 "INSERT INTO import_metadata VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -202,6 +204,24 @@ def _create_schema(connection: sqlite3.Connection) -> None:
             ON companies(enterprise_size);
         CREATE INDEX idx_company_aliases_normalized
             ON company_aliases(normalized_alias);
+        CREATE TABLE business_scope_chunks (
+            chunk_id INTEGER PRIMARY KEY,
+            unified_social_credit_code TEXT NOT NULL
+                REFERENCES companies(unified_social_credit_code),
+            section_label TEXT,
+            ordinal INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            embedding BLOB
+        );
+        CREATE INDEX idx_scope_chunks_company
+            ON business_scope_chunks(unified_social_credit_code);
+        CREATE TABLE scope_index_metadata (
+            embedding_model TEXT NOT NULL,
+            embedding_dim INTEGER NOT NULL,
+            normalized INTEGER NOT NULL,
+            chunk_count INTEGER NOT NULL,
+            built_at TEXT NOT NULL
+        );
         """
     )
 
@@ -241,6 +261,21 @@ def _insert_contacts(
         "INSERT INTO company_contacts VALUES (?, ?, ?, ?, ?)",
         [tuple(item.raw[column] for column in CONTACT_COLUMNS) for item in contacts],
     )
+
+
+def _insert_scope_chunks(
+    connection: sqlite3.Connection,
+    companies: list[_CompanySourceRow],
+) -> None:
+    for item in companies:
+        code = item.profile.unified_social_credit_code
+        for chunk in chunk_business_scope(item.profile.business_scope):
+            connection.execute(
+                "INSERT INTO business_scope_chunks "
+                "(unified_social_credit_code, section_label, ordinal, text, embedding) "
+                "VALUES (?, ?, ?, ?, NULL)",
+                (code, chunk.section_label, chunk.ordinal, chunk.text),
+            )
 
 
 def _sha256(path: Path) -> str:

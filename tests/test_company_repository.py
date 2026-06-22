@@ -127,8 +127,8 @@ def test_repository_rejects_missing_database(tmp_path):
 def test_repository_rejects_unsupported_schema_version(tmp_path):
     database_path = _build_database(tmp_path)
     with sqlite3.connect(database_path) as connection:
-        connection.execute("PRAGMA user_version = 2")
+        connection.execute("PRAGMA user_version = 99")
     repository = CompanyRepository(database_path)
 
-    with pytest.raises(RuntimeError, match="expected 1"):
+    with pytest.raises(RuntimeError, match="expected 2"):
         repository.resolve_text("示例科技股份有限公司")

@@ -34,10 +34,20 @@ def test_build_company_database_creates_schema_indexes_and_metadata(tmp_path):
 
     assert summary == {"companies": 1, "contacts": 1}
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
         assert connection.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 1
         assert connection.execute("SELECT COUNT(*) FROM company_aliases").fetchone()[0] == 2
         assert connection.execute("SELECT COUNT(*) FROM company_contacts").fetchone()[0] == 1
+        assert connection.execute(
+            "SELECT COUNT(*) FROM business_scope_chunks"
+        ).fetchone()[0] == 2
+        assert connection.execute(
+            "SELECT text FROM business_scope_chunks ORDER BY ordinal"
+        ).fetchall() == [("工业设备制造",), ("工业设备销售",)]
+        assert connection.execute(
+            "SELECT embedding FROM business_scope_chunks WHERE embedding IS NULL"
+        ).fetchall() == [(None,), (None,)]
+        assert connection.execute("SELECT COUNT(*) FROM scope_index_metadata").fetchone()[0] == 0
         metadata = connection.execute(
             "SELECT company_count, contact_count, companies_sha256, contacts_sha256 "
             "FROM import_metadata"
