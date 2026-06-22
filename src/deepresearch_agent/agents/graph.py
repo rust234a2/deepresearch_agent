@@ -55,6 +55,13 @@ def build_graph(domain_pack: DomainPack, repository: CompanyRepository):
     return graph.compile()
 
 
+def run_compiled(compiled_graph, question: str, domain: str) -> ResearchState:
+    result = compiled_graph.invoke(ResearchState(question=question, domain=domain))
+    if isinstance(result, ResearchState):
+        return result
+    return ResearchState.model_validate(result)
+
+
 def run_research(
     question: str,
     domain: str = "procurement",
@@ -63,7 +70,4 @@ def run_research(
     domain_pack = load_domain_pack(Path("domains") / domain / "domain.yaml")
     repository = CompanyRepository(database_path)
     app = build_graph(domain_pack, repository)
-    result = app.invoke(ResearchState(question=question, domain=domain))
-    if isinstance(result, ResearchState):
-        return result
-    return ResearchState.model_validate(result)
+    return run_compiled(app, question, domain)
