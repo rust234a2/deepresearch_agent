@@ -138,3 +138,19 @@ class CompanyResolution(BaseModel):
     matched_text: str | None = None
     match_type: Literal["legal_name", "alias"] | None = None
     candidates: list[CompanyResolutionCandidate] = Field(default_factory=list)
+
+
+class ScopeChunkRecord(BaseModel):
+    chunk_id: int
+    unified_social_credit_code: str
+    legal_name: str
+    section_label: str | None = None
+    text: str
+
+
+class ScopeIndexMetadata(BaseModel):
+    embedding_model: str
+    embedding_dim: int
+    normalized: bool
+    chunk_count: int
+    built_at: str

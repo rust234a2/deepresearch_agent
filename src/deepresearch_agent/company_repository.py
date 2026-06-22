@@ -11,6 +11,8 @@ from deepresearch_agent.company_models import (
     CompanyRecord,
     CompanyResolution,
     CompanyResolutionCandidate,
+    ScopeChunkRecord,
+    ScopeIndexMetadata,
 )
 
 
@@ -138,6 +140,46 @@ class CompanyRepository:
                     unified_social_credit_code=code,
                 )
             ],
+        )
+
+    def get_scope_chunks(self, chunk_ids: list[int]) -> dict[int, ScopeChunkRecord]:
+        if not chunk_ids:
+            return {}
+        placeholders = ",".join("?" for _ in chunk_ids)
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT chunks.chunk_id, chunks.unified_social_credit_code, "
+                "companies.legal_name, chunks.section_label, chunks.text "
+                "FROM business_scope_chunks AS chunks "
+                "JOIN companies USING (unified_social_credit_code) "
+                f"WHERE chunks.chunk_id IN ({placeholders})",
+                chunk_ids,
+            ).fetchall()
+        return {
+            row["chunk_id"]: ScopeChunkRecord(
+                chunk_id=row["chunk_id"],
+                unified_social_credit_code=row["unified_social_credit_code"],
+                legal_name=row["legal_name"],
+                section_label=row["section_label"],
+                text=row["text"],
+            )
+            for row in rows
+        }
+
+    def get_scope_index_metadata(self) -> ScopeIndexMetadata | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT embedding_model, embedding_dim, normalized, chunk_count, built_at "
+                "FROM scope_index_metadata LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None
+        return ScopeIndexMetadata(
+            embedding_model=row["embedding_model"],
+            embedding_dim=row["embedding_dim"],
+            normalized=bool(row["normalized"]),
+            chunk_count=row["chunk_count"],
+            built_at=row["built_at"],
         )
 
 

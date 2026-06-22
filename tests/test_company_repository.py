@@ -117,6 +117,28 @@ def test_repository_prefers_more_specific_name_over_substring(tmp_path):
     assert result.unified_social_credit_code == "91330000123456789X"
 
 
+def test_repository_returns_scope_chunks_by_id(tmp_path):
+    repository = CompanyRepository(_build_database(tmp_path))
+    with sqlite3.connect(_build_database(tmp_path)) as connection:
+        ids = [row[0] for row in connection.execute(
+            "SELECT chunk_id FROM business_scope_chunks ORDER BY chunk_id"
+        )]
+
+    records = repository.get_scope_chunks(ids)
+
+    assert set(records) == set(ids)
+    first = records[ids[0]]
+    assert first.legal_name == "示例科技股份有限公司"
+    assert first.text in {"工业设备制造", "工业设备销售"}
+    assert repository.get_scope_chunks([]) == {}
+
+
+def test_repository_scope_index_metadata_absent_before_build(tmp_path):
+    repository = CompanyRepository(_build_database(tmp_path))
+
+    assert repository.get_scope_index_metadata() is None
+
+
 def test_repository_rejects_missing_database(tmp_path):
     repository = CompanyRepository(tmp_path / "missing.sqlite3")
 
