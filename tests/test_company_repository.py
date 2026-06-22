@@ -35,6 +35,17 @@ def test_repository_returns_profile_aliases_and_contact(tmp_path):
     assert record.contact.phones == ["0571-12345678", "400-123-4567"]
 
 
+def test_repository_get_contact_returns_contact_and_none_for_missing(tmp_path):
+    repository = CompanyRepository(_build_database(tmp_path))
+
+    contact = repository.get_contact("91330000123456789X")
+
+    assert contact is not None
+    assert contact.legal_name == "示例科技股份有限公司"
+    assert contact.phones == ["0571-12345678", "400-123-4567"]
+    assert repository.get_contact("missing-code") is None
+
+
 def test_repository_resolves_legal_name_and_alias_from_question(tmp_path):
     repository = CompanyRepository(_build_database(tmp_path))
 

@@ -68,8 +68,15 @@ class CompanyRepository:
         return CompanyRecord(profile=profile, contact=contact)
 
     def get_contact(self, code: str) -> CompanyContact | None:
-        record = self.get_by_credit_code(code)
-        return record.contact if record is not None else None
+        normalized_code = code.strip()
+        with self._connect() as connection:
+            contact_row = connection.execute(
+                "SELECT * FROM company_contacts WHERE unified_social_credit_code = ?",
+                (normalized_code,),
+            ).fetchone()
+        if contact_row is None:
+            return None
+        return CompanyContact.model_validate(dict(contact_row))
 
     def resolve_text(self, text: str) -> CompanyResolution:
         normalized_text = normalize_company_name(text)
