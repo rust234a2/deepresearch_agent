@@ -36,6 +36,7 @@ class ToolTrace(BaseModel):
     status: Literal["ok", "error"]
     latency_ms: int
     permission_tier: str
+    error: str | None = None
 
 
 class SupplierReport(BaseModel):

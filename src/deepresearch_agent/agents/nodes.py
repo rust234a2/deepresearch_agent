@@ -240,7 +240,7 @@ def _run_tool(state: ResearchState, tools: ToolRegistry, name: str, args: dict):
         return None
     try:
         result = tools.run(name, args)
-    except Exception:
+    except Exception as exc:
         state.trace.append(
             ToolTrace(
                 tool_name=name,
@@ -248,6 +248,7 @@ def _run_tool(state: ResearchState, tools: ToolRegistry, name: str, args: dict):
                 status="error",
                 latency_ms=0,
                 permission_tier="unavailable",
+                error=str(exc),
             )
         )
         return None
@@ -258,6 +259,7 @@ def _run_tool(state: ResearchState, tools: ToolRegistry, name: str, args: dict):
             status=result.status,
             latency_ms=result.latency_ms,
             permission_tier=result.permission_tier,
+            error=result.data.get("error") if result.status == "error" else None,
         )
     )
     return result

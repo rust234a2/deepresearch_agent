@@ -4,7 +4,7 @@ from deepresearch_agent.agents.nodes import critique_node, planner_node, researc
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.domain import load_domain_pack
 from deepresearch_agent.state import ResearchState
-from deepresearch_agent.tools.base import ToolRegistry
+from deepresearch_agent.tools.base import RegisteredTool, ToolRegistry
 from deepresearch_agent.tools.procurement import build_procurement_tool_registry
 
 
@@ -97,6 +97,37 @@ def test_researcher_records_unavailable_tool(company_database_path):
     assert updated.evidence == []
     assert updated.trace[0].tool_name == "get_company_profile"
     assert updated.trace[0].status == "error"
+    assert updated.trace[0].error is not None
+    assert "get_company_profile" in updated.trace[0].error
+
+
+def test_researcher_captures_tool_error_message(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="核验示例科技股份有限公司", domain="procurement"),
+        DOMAIN_PACK,
+        repository,
+    )
+    registry = ToolRegistry()
+
+    def boom(args: dict) -> dict:
+        raise ValueError("db exploded")
+
+    registry.register(
+        RegisteredTool(
+            name="get_company_profile",
+            description="raises for test",
+            permission_tier="read_private",
+            handler=boom,
+        )
+    )
+
+    updated = researcher_node(state, registry, DOMAIN_PACK)
+
+    profile_trace = next(item for item in updated.trace if item.tool_name == "get_company_profile")
+    assert profile_trace.status == "error"
+    assert profile_trace.error is not None
+    assert "db exploded" in profile_trace.error
 
 
 def test_critic_identifies_missing_source_dimension(company_database_path):
