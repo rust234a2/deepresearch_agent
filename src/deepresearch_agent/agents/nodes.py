@@ -7,6 +7,8 @@ from deepresearch_agent.state import (
     Evidence,
     ResearchPlanItem,
     ResearchState,
+    ScopeCandidate,
+    ScopeSearchReport,
     SupplierReport,
     ToolTrace,
 )
@@ -118,6 +120,85 @@ def writer_node(state: ResearchState, domain_pack: DomainPack) -> ResearchState:
         open_questions=open_questions,
     )
     return state
+
+
+SCOPE_SEARCH_K = 10
+
+_SCOPE_OPEN_QUESTIONS = [
+    "经营范围匹配仅为登记信息，不代表实际产能、交期或质量。",
+    "接入制裁和监管名单数据。",
+    "接入司法案件与负面新闻数据。",
+    "接入财务数据。",
+    "接入产能、交期与质量认证数据。",
+    "接入内部采购履约数据。",
+]
+
+
+def scope_search_node(state: ResearchState, retriever) -> ResearchState:
+    if retriever is None:
+        state.scope_report = ScopeSearchReport(
+            query=state.question,
+            summary="经营范围语义检索不可用：请安装 .[rag] 可选依赖并运行 "
+            "scripts/build_scope_index.py 构建索引。",
+            candidates=[],
+            open_questions=["安装 .[rag] 可选依赖并构建 FAISS 经营范围索引。"],
+        )
+        return state
+
+    try:
+        hits = retriever.search(state.question, SCOPE_SEARCH_K)
+    except Exception as exc:  # 检索期异常兜底为不可用报告
+        state.scope_report = ScopeSearchReport(
+            query=state.question,
+            summary=f"经营范围语义检索失败：{exc}",
+            candidates=[],
+            open_questions=["检查 .[rag] 依赖与 FAISS 索引后重试。"],
+        )
+        return state
+
+    candidates = _group_scope_hits(hits)
+    if candidates:
+        summary = (
+            f"按经营范围语义检索到 {len(candidates)} 家候选企业；"
+            "现有数据仅工商经营范围，不足以作出采购批准或风险结论。"
+        )
+    else:
+        summary = "未检索到经营范围匹配的企业。"
+    state.scope_report = ScopeSearchReport(
+        query=state.question,
+        summary=summary,
+        candidates=candidates,
+        open_questions=list(_SCOPE_OPEN_QUESTIONS),
+    )
+    return state
+
+
+def _group_scope_hits(hits) -> list[ScopeCandidate]:
+    grouped: dict[str, ScopeCandidate] = {}
+    for hit in hits:
+        evidence = Evidence(
+            claim=hit.text,
+            dimension="business_scope_match",
+            confidence=min(max(hit.score, 0.0), 1.0),
+            citation=Citation(
+                source_id=f"company:{hit.unified_social_credit_code}",
+                title=f"{hit.legal_name} 经营范围",
+                url=f"local://companies/{hit.unified_social_credit_code}",
+                snippet=hit.text,
+            ),
+        )
+        candidate = grouped.get(hit.unified_social_credit_code)
+        if candidate is None:
+            grouped[hit.unified_social_credit_code] = ScopeCandidate(
+                unified_social_credit_code=hit.unified_social_credit_code,
+                legal_name=hit.legal_name,
+                matched_clauses=[evidence],
+                top_score=hit.score,
+            )
+        else:
+            candidate.matched_clauses.append(evidence)
+            candidate.top_score = max(candidate.top_score, hit.score)
+    return list(grouped.values())
 
 
 def _append_profile_evidence(state: ResearchState, data: dict) -> None:

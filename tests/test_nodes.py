@@ -130,6 +130,65 @@ def test_researcher_captures_tool_error_message(company_database_path):
     assert "db exploded" in profile_trace.error
 
 
+def test_scope_search_node_returns_unavailable_when_retriever_missing():
+    from deepresearch_agent.agents.nodes import scope_search_node
+
+    state = ResearchState(question="哪些企业能做注塑成型", domain="procurement")
+    updated = scope_search_node(state, None)
+
+    assert updated.scope_report is not None
+    assert updated.scope_report.recommendation == "insufficient_evidence"
+    assert updated.scope_report.candidates == []
+    assert "不可用" in updated.scope_report.summary
+
+
+def test_scope_search_node_groups_hits_into_candidates():
+    from deepresearch_agent.agents.nodes import scope_search_node
+
+    class _Hit:
+        def __init__(self, code, name, text, score):
+            self.unified_social_credit_code = code
+            self.legal_name = name
+            self.section_label = None
+            self.text = text
+            self.score = score
+
+    class _Retriever:
+        def search(self, query, k):
+            return [
+                _Hit("X", "示例科技股份有限公司", "工业设备制造", 0.95),
+                _Hit("X", "示例科技股份有限公司", "工业设备销售", 0.80),
+            ]
+
+    state = ResearchState(question="工业设备制造", domain="procurement")
+    updated = scope_search_node(state, _Retriever())
+
+    report = updated.scope_report
+    assert report is not None
+    assert report.recommendation == "insufficient_evidence"
+    assert len(report.candidates) == 1
+    candidate = report.candidates[0]
+    assert candidate.unified_social_credit_code == "X"
+    assert candidate.top_score == 0.95
+    assert [ev.claim for ev in candidate.matched_clauses] == ["工业设备制造", "工业设备销售"]
+    assert candidate.matched_clauses[0].dimension == "business_scope_match"
+    assert candidate.matched_clauses[0].citation.url == "local://companies/X"
+
+
+def test_scope_search_node_reports_no_matches_when_empty():
+    from deepresearch_agent.agents.nodes import scope_search_node
+
+    class _Empty:
+        def search(self, query, k):
+            return []
+
+    state = ResearchState(question="完全不相关的查询", domain="procurement")
+    updated = scope_search_node(state, _Empty())
+
+    assert updated.scope_report.candidates == []
+    assert "未检索到" in updated.scope_report.summary
+
+
 def test_critic_identifies_missing_source_dimension(company_database_path):
     state = planner_node(
         ResearchState(question="核验示例科技股份有限公司", domain="procurement"),
