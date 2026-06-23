@@ -56,7 +56,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 运行 Agent：
 
 ```powershell
-# CLI
+# CLI（核验指定企业，或按能力检索供应商：问题不含已知企业名时走经营范围语义检索）
 .\.conda-env\python.exe -m deepresearch_agent.cli `
   "核验万马科技股份有限公司的工商和经营范围" `
   --database data/procurement/derived/companies.sqlite3
