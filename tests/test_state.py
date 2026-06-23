@@ -63,3 +63,40 @@ def test_supplier_report_contains_recommendation_and_evidence():
 
     assert report.recommendation == "conditional"
     assert report.evidence_table[0].claim.startswith("ACME")
+
+
+def test_scope_search_report_defaults_to_insufficient_evidence():
+    from deepresearch_agent.state import (
+        Citation,
+        Evidence,
+        ScopeCandidate,
+        ScopeSearchReport,
+    )
+
+    evidence = Evidence(
+        claim="工业设备制造",
+        dimension="business_scope_match",
+        confidence=0.9,
+        citation=Citation(
+            source_id="company:X",
+            title="示例 经营范围",
+            url="local://companies/X",
+            snippet="工业设备制造",
+        ),
+    )
+    candidate = ScopeCandidate(
+        unified_social_credit_code="X",
+        legal_name="示例科技股份有限公司",
+        matched_clauses=[evidence],
+        top_score=0.9,
+    )
+    report = ScopeSearchReport(
+        query="工业设备制造",
+        summary="一家候选",
+        candidates=[candidate],
+        open_questions=[],
+    )
+
+    assert report.recommendation == "insufficient_evidence"
+    assert report.candidates[0].legal_name == "示例科技股份有限公司"
+    assert report.candidates[0].matched_clauses[0].dimension == "business_scope_match"

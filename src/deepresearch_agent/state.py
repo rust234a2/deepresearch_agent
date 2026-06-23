@@ -48,6 +48,21 @@ class SupplierReport(BaseModel):
     open_questions: list[str]
 
 
+class ScopeCandidate(BaseModel):
+    unified_social_credit_code: str
+    legal_name: str
+    matched_clauses: list[Evidence]
+    top_score: float
+
+
+class ScopeSearchReport(BaseModel):
+    query: str
+    recommendation: Recommendation = "insufficient_evidence"
+    summary: str
+    candidates: list[ScopeCandidate]
+    open_questions: list[str]
+
+
 class ResearchState(BaseModel):
     question: str
     domain: str
@@ -60,4 +75,5 @@ class ResearchState(BaseModel):
     evidence: list[Evidence] = Field(default_factory=list)
     missing_dimensions: list[str] = Field(default_factory=list)
     report: SupplierReport | None = None
+    scope_report: ScopeSearchReport | None = None
     trace: list[ToolTrace] = Field(default_factory=list)
