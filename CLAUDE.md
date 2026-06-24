@@ -79,12 +79,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `raw/*.xlsx` → `company_data_cleaning.run_cleaning` → `processed/companies.csv` + `contacts.csv` (+ `rejected.csv`) → `company_database.build_company_database` → `derived/companies.sqlite3` → `CompanyRepository` → Agent。
 
 - `raw/`、`processed/`、`derived/` 全部 Git 忽略。测试只用 `tests/fixtures/procurement/` 中字段结构相同的合成 CSV（见 `tests/conftest.py` 的 `company_database_path` fixture，它在 `tmp_path` 现场构建 SQLite）。
-- 数据库构建是**原子**的：写临时文件 → 校验/事务 → `replace` 旧文件。`SCHEMA_VERSION`（当前为 1）写入 `PRAGMA user_version`；Repository 用只读连接打开，版本不匹配直接报错要求重建。改 schema 必须同步 `SCHEMA_VERSION` 和 `_create_schema`。
+- 数据库构建是**原子**的：写临时文件 → 校验/事务 → `replace` 旧文件。`SCHEMA_VERSION`（当前为 2，含 `business_scope_chunks` 与 `scope_index_metadata` 表）写入 `PRAGMA user_version`；Repository 用只读连接打开，版本不匹配直接报错要求重建。改 schema 必须同步 `SCHEMA_VERSION` 和 `_create_schema`。
 
 ### LangGraph 编排（`agents/graph.py` + `agents/nodes.py`）
 `StateGraph(ResearchState)`，节点 `planner → researcher → critic → writer`，两处条件路由：
 
-- planner 后：`resolve_supplier` 解析企业。`resolved` 才进 researcher，否则（`ambiguous`/`not_found`）直接进 writer 输出无法解析报告。
+- planner 后：`resolve_supplier` 解析企业。`resolved` 进 researcher；`not_found` 且启用 scope（`run_research(enable_scope=True)`，CLI 默认开）进 `scope_search` 走经营范围语义检索；其余（`ambiguous`，或未启用 scope 的 `not_found`）进 writer。
 - critic 后：`missing_dimensions` 非空且 `iteration < max_iterations(3)` 则回 researcher，否则进 writer。
 
 researcher 只调用 Domain Pack 白名单内的私有数据工具（`get_company_profile`、`get_company_contact`），把工商/联系方式字段拆成六个研究维度的 `Evidence`（每条带 `local://` Citation）。critic 用“计划维度 − 已覆盖维度”算缺口。所有状态都在 `state.py` 的 Pydantic 模型里流转。
@@ -104,6 +104,6 @@ researcher 只调用 Domain Pack 白名单内的私有数据工具（`get_compan
 
 ## 注意点
 
-- `rag/` 是语义经营范围检索子系统（切块 → bge-small-zh-v1.5 嵌入 → FAISS → `ScopeRetriever` → `search_company_scope` 工具 + CLI）。依赖 `.[rag]` 可选 extra；FAISS 索引由 `scripts/build_scope_index.py` 从 SQLite 重建。**尚未接入 planner→writer 主图**，仅作为独立工具与 CLI（端到端接入是后续工作）。旧的 `retrieval/local.py` 关键词检索器已删除。
+- `rag/` 是语义经营范围检索子系统（切块 → bge-small-zh-v1.5 嵌入 → FAISS → `ScopeRetriever` → `search_company_scope` 工具 + CLI）。依赖 `.[rag]` 可选 extra；FAISS 索引由 `scripts/build_scope_index.py` 从 SQLite 重建。已接入主图：planner 的 `not_found` 在 `enable_scope=True` 时路由到 `scope_search_node`，输出 `ScopeSearchReport` 候选清单（`run_research` 内懒加载 rag，缺 `.[rag]`/索引则降级为“不可用”报告）。`enable_scope` 仅 CLI 启用，`/research` API 形状不变；端到端“先筛选再逐个核验”是后续工作。旧的 `retrieval/local.py` 关键词检索器已删除。
 - `docs/architecture.md` 是架构事实标准；`docs/superpowers/` 下是历史 spec 和 plan。
 - 真实最新构建结果：3506 家企业、3506 条联系方式（参考量级，以 `import_metadata` 表为准）。
