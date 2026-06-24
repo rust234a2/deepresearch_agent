@@ -1,6 +1,6 @@
 # 项目记忆
 
-更新时间：2026-06-21
+更新时间：2026-06-23
 
 本文件记录已经确认的工程决策和项目状态。后续会话开始前应先阅读本文件，并以用户最新指令为准。
 
@@ -8,40 +8,31 @@
 
 - 全程使用中文沟通。
 - 每完成一个模块提交 Git，提交信息使用中文。
-- 用户允许直接在 `master` 工作；SQLite 企业数据层当前在隔离分支 `feature/sqlite-company-data` 实施。
+- 较大功能在 `feature/*` 隔离分支实施，完成、测试全绿后合并回 `master` 并删除分支（近两个功能在 `feature/rag-scope-retrieval`、`feature/agent-scope-search`）。允许直接在 `master` 做文档/小修。
 - 不覆盖或回退用户未提交的文件修改。
 
 ## 当前目标和数据原则
 
-项目面向中国制造业供应商工商研究。企查查清洗 CSV 是企业事实标准，SQLite 是可重复生成的查询产物，Agent 只陈述数据源实际提供的字段。
+项目面向中国制造业供应商工商研究。企查查清洗 CSV 是企业事实标准，SQLite 是可重复生成的查询产物，Agent 只陈述数据源实际提供的字段，绝不把数据缺失解释为“没有风险”。
 
-当前不使用实时 API、网页爬虫、Qdrant、GraphRAG 或 MCP。RAGAS、Phoenix、golden cases 和正式评估层后置。
+数据本地化：跨企业语义检索使用**本地** bge-small-zh-v1.5 + 本地 FAISS，受限工商数据不出本机。当前**不**使用实时 API、网页爬虫、外部嵌入 API、Qdrant、GraphRAG 或 MCP。RAGAS、Phoenix、golden cases 和正式评估层后置。
 
 ## 已完成模块
 
 1. FastAPI 和 CLI 入口。
 2. LangGraph Planner、Researcher、Critic、Writer 编排循环。
 3. Domain Pack 工具白名单和研究维度。
-4. 中国制造业候选名单生成器，3509 家企业、15 个行业。
+4. 中国制造业候选名单生成器。
 5. 企查查 Excel 清洗器，输出企业、联系方式和拒绝记录。
 6. 以清洗字段为标准的 `CompanyProfile` 和 `CompanyContact` 强类型模型。
-7. SQLite schema version 1 和原子数据库构建器。
-8. 只读 `CompanyRepository`，支持信用代码、法定名称和曾用名查询以及歧义结果。
+7. SQLite schema 与原子数据库构建器（当前 version 2）。
+8. 只读 `CompanyRepository`，支持信用代码、法定名称和曾用名查询、歧义结果，以及 chunk / 索引元数据读取。
 9. `get_company_profile` 和 `get_company_contact` 两个私有数据工具。
 10. 基于六个工商维度的 Agent 证据生成路径。
 11. 旧能力、合规、财务、采购历史组合模型和两家英文演示供应商已删除。
-
-SQLite 企业数据层相关提交：
-
-```text
-d65a94f 重构：以工商数据源重建企业模型
-14d46ab 功能：增加SQLite企业数据库构建器
-3a562a5 功能：增加只读企业Repository
-bd7a387 功能：增加企业数据库构建命令
-1620af9 重构：让企业识别和工具使用SQLite
-72d4e82 重构：让研究图基于工商数据生成证据
-ad5982a 文档：切换到SQLite企业数据运行路径
-```
+12. 一组质量修复：资本金额支持“亿”单位、API 启动时单次建图与仓库、企业识别去假歧义（子串被更具体名称支配则丢弃）、`get_contact` 只查联系方式表、工具失败时保留错误信息。
+13. **RAG 语义经营范围检索模块（`rag/`）**：经营范围条款感知切块 → bge-small-zh-v1.5 嵌入 → FAISS（`IndexIDMap(IndexFlatIP)`）→ `ScopeRetriever` → `search_company_scope` 工具 + 独立 CLI。schema 升到 version 2（新增 `business_scope_chunks`、`scope_index_metadata`）。依赖 `.[rag]` 可选 extra。
+14. **scope 检索端到端接入 Agent（方案 A）**：planner 的 `not_found` 在 `enable_scope=True` 时路由到 `scope_search_node`，输出 `ScopeSearchReport` 候选清单（企业 + 命中条款 + 评分，`recommendation` 固定 `insufficient_evidence`）。`enable_scope` 仅 CLI 启用，`/research` API 响应形状不变；核验指定企业流程不变；缺 `.[rag]`/索引时懒加载降级为“不可用”报告。
 
 ## 本地数据状态
 
@@ -50,46 +41,39 @@ ad5982a 文档：切换到SQLite企业数据运行路径
 ```text
 data/procurement/raw/          企查查原始 Excel，Git 忽略
 data/procurement/processed/    companies.csv / contacts.csv / rejected.csv，Git 忽略
-data/procurement/derived/      companies.sqlite3，Git 忽略
+data/procurement/derived/      companies.sqlite3 / scope_index.faiss，Git 忽略
 tests/fixtures/procurement/    可提交的合成测试数据
 ```
 
-最新清洗和构建结果：
+最新清洗和构建结果（参考量级，以 `import_metadata` 表为准）：
 
-- 原始输入：3509 条。
 - 企业：3506 条。
 - 联系方式：3506 条。
-- 未匹配：3 条。
 - SQLite 信用代码主键无重复。
-- 万马科技可通过法定名称、信用代码和曾用名查询。
-- 万马科技经营范围原文长度为 623 字。
+- 万马科技可通过法定名称、信用代码和曾用名查询，经营范围原文约 623 字。
 
-清洗器已把字段值完全由星号组成的脱敏占位符视为缺失值，但保留经营范围内部的 `***` 分隔符。
+清洗器把字段值完全由星号组成的脱敏占位符视为缺失值，但保留经营范围内部的 `***` 分隔符（作为段切点：许可项目 / 一般项目）。
 
-未匹配企业仍为：
-
-```text
-厦门建霖智慧家居股份有限公司
-华虹宏力半导体有限公司
-山东（原文件名称存在乱码）橡塑科技股份有限公司
-```
+注：`derived/scope_index.faiss` 需 `.[rag]` 依赖、用 `scripts/build_scope_index.py` 从 SQLite 重建；尚未对真实 3506 家库验证召回质量（待办）。
 
 ## 正式模型和数据库
 
 `CompanyProfile` 覆盖法定名称、信用代码、登记状态、法人、企业类型、注册/实缴资本、成立和营业期限、地址、省市区、登记机关、国标行业、企业规模、完整经营范围、曾用名、英文名、官网、参保人数、年报年份和纳税人资质。
 
-SQLite 表：
+SQLite schema version 2，表：
 
 - `companies`
 - `company_aliases`
 - `company_contacts`
+- `business_scope_chunks`（chunk_id、信用代码、段标签、序号、文本、embedding BLOB）
+- `scope_index_metadata`（嵌入模型名、维度、归一化、chunk 数、构建时间）
 - `import_metadata`
 
-索引覆盖规范化法定名称、别名、登记状态、省市、国标行业大类和企业规模。运行时使用只读连接，schema 版本不匹配时要求重建。
+索引覆盖规范化法定名称、别名、登记状态、省市、国标行业大类、企业规模、以及 chunk 的信用代码。运行时使用只读连接，schema 版本不匹配时要求重建。
 
 ## Agent 当前能力边界
 
-研究维度：
+核验路径研究维度：
 
 ```text
 company_identity
@@ -102,15 +86,21 @@ contact
 
 经营范围按原文作为证据，不推断产品、产能、交期、认证或风险。当前没有制裁、司法、负面新闻、财务和采购履约数据，因此已解析企业的报告固定为 `insufficient_evidence`，不得写“未发现风险”。
 
+scope 检索路径：能力类问题（未指名企业）返回 `ScopeSearchReport` 候选清单，同样固定 `insufficient_evidence`——按经营范围找到企业不等于采购背书。
+
+## 环境注意（非显而易见）
+
+工作区 conda 环境（Python 3.11）通过 `.conda-env/Lib/site-packages/python312-langgraph-bridge.pth` 桥接 Python 3.12 全局 site-packages，`langgraph`/`langchain_core` 经此共享。后果：3.12 编译的原生扩展包（torch/numpy/regex/scikit-learn/tokenizers 等）在 3.11 下加载失败。已用 `pip install --ignore-installed <pkg>` 把 3.11 版强装进 conda env 覆盖之（faiss-cpu、numpy、sentence-transformers、torch、scikit-learn、scipy、regex、socksio）。**不要删除该 .pth 桥**（现有测试依赖它）。模型下载走 `ALL_PROXY=socks5://127.0.0.1:7890`，需要 `socksio`。
+
 ## 尚未实施
 
-- 经营范围条款感知分块。
-- 中文分词和 SQLite FTS5/BM25。
 - 制裁、司法、新闻、财务和采购履约独立数据源。
+- 方案 B（先 scope 筛选 top-N，再对每家自动跑工商核验）——评估为便利层而非新能力，按 YAGNI 缓做。
+- `/research` API 端到端暴露 scope（目前仅 CLI）。
+- ruff + mypy 静态检查。
 - RAGAS、Phoenix 和 golden cases。
-- 向量检索、GraphRAG、MCP 和 LangGraph checkpoint。
-
-建议下一阶段先实现经营范围分块和中文 FTS5/BM25，再引入其他数据源。
+- GraphRAG、MCP、Qdrant 和 LangGraph checkpoint。
+- jieba 真分词替代 trigram（注：当前检索走语义向量，trigram 仅是 FTS5 备选，未采用）。
 
 ## 常用命令
 
@@ -121,12 +111,19 @@ contact
 
 .\.conda-env\python.exe scripts/build_company_database.py
 
+# 构建 FAISS 经营范围语义索引（需 .[rag]）
+.\.conda-env\python.exe scripts/build_scope_index.py
+
+# CLI：核验指定企业，或按能力检索（未指名企业时走 scope 语义检索）
 .\.conda-env\python.exe -m deepresearch_agent.cli `
   "核验万马科技股份有限公司的工商和经营范围" `
   --database data/procurement/derived/companies.sqlite3
 
-.\.conda-env\python.exe -m pytest -q -p no:cacheprovider `
-  --basetemp=.conda-cache/pytest-final
+# 默认测试（慢速真模型测试默认排除）
+.\.conda-env\python.exe -m pytest -q -p no:cacheprovider --basetemp=.conda-cache/pytest-final
+
+# 慢速测试（加载真 bge 模型）
+.\.conda-env\python.exe -m pytest -m slow -q
 ```
 
-最后一次完整验证：67 项测试通过。真实 SQLite 构建结果为 3506 家企业、3506 条联系方式。
+最后一次完整验证：默认 93 项通过、2 项慢速（真 bge 模型）默认排除且单独验证通过。
