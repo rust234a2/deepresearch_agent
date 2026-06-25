@@ -29,7 +29,7 @@ def test_build_company_database_cli_writes_database_and_summary(tmp_path, capsys
     assert database_path.exists()
     assert capsys.readouterr().out.strip() == (
         "companies=1 contacts=1 shareholders=0 investments=0 "
-        "unresolved_shareholders=0 unresolved_investments=0"
+        "unresolved_shareholders=0 unresolved_investments=0 nodes=0"
     )
 
 
@@ -61,5 +61,5 @@ def test_build_company_database_script_runs_without_installed_package(tmp_path):
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == (
         "companies=1 contacts=1 shareholders=0 investments=0 "
-        "unresolved_shareholders=0 unresolved_investments=0"
+        "unresolved_shareholders=0 unresolved_investments=0 nodes=0"
     )

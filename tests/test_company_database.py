@@ -39,9 +39,10 @@ def test_build_company_database_creates_schema_indexes_and_metadata(tmp_path):
         "investments": 0,
         "unresolved_shareholders": 0,
         "unresolved_investments": 0,
+        "nodes": 0,
     }
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
         assert connection.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 1
         assert connection.execute("SELECT COUNT(*) FROM company_aliases").fetchone()[0] == 2
         assert connection.execute("SELECT COUNT(*) FROM company_contacts").fetchone()[0] == 1
@@ -85,7 +86,59 @@ def test_build_company_database_creates_schema_indexes_and_metadata(tmp_path):
         "idx_shareholders_holder_code",
         "idx_investments_company",
         "idx_investments_investee_code",
+        "idx_graph_nodes_normalized",
+        "idx_graph_nodes_type",
     } <= indexes
+
+
+def test_build_company_database_builds_graph_nodes(tmp_path):
+    database_path = tmp_path / "companies.sqlite3"
+
+    summary = build_company_database(
+        FIXTURES / "companies.csv",
+        FIXTURES / "contacts.csv",
+        database_path,
+        shareholders_csv=FIXTURES / "shareholders.csv",
+        investments_csv=FIXTURES / "investments.csv",
+    )
+
+    assert summary["nodes"] == 3
+    with sqlite3.connect(database_path) as connection:
+        company = connection.execute(
+            "SELECT node_type, in_database, unified_social_credit_code, is_person, mention_count "
+            "FROM graph_nodes WHERE node_id = '91330000123456789X'"
+        ).fetchone()
+        assert company == ("company", 1, "91330000123456789X", 0, 6)
+        person = connection.execute(
+            "SELECT node_type, in_database, is_person FROM graph_nodes WHERE node_id = 'person:张三'"
+        ).fetchone()
+        assert person == ("person", 0, 1)
+        external = connection.execute(
+            "SELECT node_type, in_database FROM graph_nodes "
+            "WHERE display_name = '某外部子公司有限公司'"
+        ).fetchone()
+        assert external == ("company", 0)
+
+
+def test_build_company_database_classifies_fund_nodes(tmp_path):
+    fixtures = Path(__file__).parent / "fixtures" / "procurement" / "ownership_links"
+    database_path = tmp_path / "companies.sqlite3"
+
+    build_company_database(
+        fixtures / "companies.csv",
+        fixtures / "contacts.csv",
+        database_path,
+        shareholders_csv=fixtures / "shareholders.csv",
+        investments_csv=fixtures / "investments.csv",
+    )
+
+    with sqlite3.connect(database_path) as connection:
+        fund = connection.execute(
+            "SELECT node_type, node_id FROM graph_nodes "
+            "WHERE display_name = '嘉实沪深300指数证券投资基金'"
+        ).fetchone()
+        assert fund[0] == "fund"
+        assert fund[1].startswith("fund:")
 
 
 def test_build_company_database_rejects_duplicate_credit_code_with_line_number(tmp_path):
@@ -156,6 +209,7 @@ def test_build_company_database_ingests_ownership_resolves_and_skips(tmp_path):
         "investments": 2,
         "unresolved_shareholders": 1,
         "unresolved_investments": 1,
+        "nodes": 3,
     }
     with sqlite3.connect(database_path) as connection:
         assert connection.execute("SELECT COUNT(*) FROM company_shareholders").fetchone()[0] == 2

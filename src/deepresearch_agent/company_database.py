@@ -11,11 +11,11 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from deepresearch_agent.company_data_cleaning import CONTACT_COLUMNS, CORE_COLUMNS
-from deepresearch_agent.company_models import CompanyContact, CompanyProfile
+from deepresearch_agent.company_models import FUND_NOISE_KEYWORDS, CompanyContact, CompanyProfile
 from deepresearch_agent.rag.chunking import chunk_business_scope
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 @dataclass(frozen=True)
@@ -167,6 +167,7 @@ def _build_atomic_database(
             inv_inserted, inv_unresolved = _insert_investments(
                 connection, investments, legal_map, alias_map
             )
+            node_count = _insert_graph_nodes(connection, companies)
             connection.execute(
                 "INSERT INTO import_metadata VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -197,6 +198,7 @@ def _build_atomic_database(
         "investments": inv_inserted,
         "unresolved_shareholders": sh_unresolved,
         "unresolved_investments": inv_unresolved,
+        "nodes": node_count,
     }
 
 
@@ -310,6 +312,18 @@ def _create_schema(connection: sqlite3.Connection) -> None:
             ON company_investments(unified_social_credit_code);
         CREATE INDEX idx_investments_investee_code
             ON company_investments(investee_credit_code);
+        CREATE TABLE graph_nodes (
+            node_id TEXT PRIMARY KEY,
+            display_name TEXT NOT NULL,
+            normalized_name TEXT NOT NULL,
+            node_type TEXT NOT NULL,
+            in_database INTEGER NOT NULL,
+            unified_social_credit_code TEXT,
+            is_person INTEGER NOT NULL,
+            mention_count INTEGER NOT NULL
+        );
+        CREATE INDEX idx_graph_nodes_normalized ON graph_nodes(normalized_name);
+        CREATE INDEX idx_graph_nodes_type ON graph_nodes(node_type);
         """
     )
 
@@ -473,6 +487,96 @@ def _insert_investments(
         )
         inserted += 1
     return inserted, unresolved
+
+
+def _insert_graph_nodes(
+    connection: sqlite3.Connection,
+    companies: list[_CompanySourceRow],
+) -> int:
+    legal_map = {
+        item.profile.unified_social_credit_code: item.profile.legal_name for item in companies
+    }
+    nodes: dict[str, dict] = {}
+
+    def bump_company(code: str) -> None:
+        node = nodes.get(code)
+        if node is None:
+            legal_name = legal_map[code]
+            nodes[code] = {
+                "node_id": code,
+                "display_name": legal_name,
+                "normalized_name": normalize_company_name(legal_name),
+                "node_type": "company",
+                "in_database": 1,
+                "unified_social_credit_code": code,
+                "is_person": 0,
+                "mention_count": 1,
+            }
+        else:
+            node["mention_count"] += 1
+
+    def bump_external(display_name: str, normalized_name: str, is_person: bool) -> None:
+        if is_person:
+            node_id = f"person:{normalized_name}"
+            node_type = "person"
+        elif any(keyword in normalized_name for keyword in FUND_NOISE_KEYWORDS):
+            node_id = f"fund:{normalized_name}"
+            node_type = "fund"
+        else:
+            node_id = f"ext:{normalized_name}"
+            node_type = "company"
+        node = nodes.get(node_id)
+        if node is None:
+            nodes[node_id] = {
+                "node_id": node_id,
+                "display_name": display_name,
+                "normalized_name": normalized_name,
+                "node_type": node_type,
+                "in_database": 0,
+                "unified_social_credit_code": None,
+                "is_person": 1 if is_person else 0,
+                "mention_count": 1,
+            }
+        else:
+            node["mention_count"] += 1
+
+    for anchor, name, normalized, code, is_person in connection.execute(
+        "SELECT unified_social_credit_code, shareholder_name, normalized_shareholder_name, "
+        "shareholder_credit_code, shareholder_is_person FROM company_shareholders"
+    ).fetchall():
+        bump_company(anchor)
+        if code is not None:
+            bump_company(code)
+        else:
+            bump_external(name, normalized, is_person == "true")
+
+    for anchor, name, normalized, code in connection.execute(
+        "SELECT unified_social_credit_code, investee_name, normalized_investee_name, "
+        "investee_credit_code FROM company_investments"
+    ).fetchall():
+        bump_company(anchor)
+        if code is not None:
+            bump_company(code)
+        else:
+            bump_external(name, normalized, False)
+
+    for node in nodes.values():
+        connection.execute(
+            "INSERT INTO graph_nodes (node_id, display_name, normalized_name, node_type, "
+            "in_database, unified_social_credit_code, is_person, mention_count) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                node["node_id"],
+                node["display_name"],
+                node["normalized_name"],
+                node["node_type"],
+                node["in_database"],
+                node["unified_social_credit_code"],
+                node["is_person"],
+                node["mention_count"],
+            ),
+        )
+    return len(nodes)
 
 
 def _sha256(path: Path) -> str:
