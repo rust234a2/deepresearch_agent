@@ -1,0 +1,4 @@
+company_name,normalized_company_name,investee_name,normalized_investee_name,status,investee_established_date,holding_pct,subscribed_capital_amount,subscribed_capital_currency,subscribed_capital_original,final_beneficiary_pct,region,industry,associated_product
+示例科技股份有限公司,示例科技股份有限公司,示例科技股份有限公司,示例科技股份有限公司,存续,2020-01-02,100%,1000000,CNY,100万元,100%,浙江省,制造业,
+示例科技股份有限公司,示例科技股份有限公司,某外部子公司有限公司,某外部子公司有限公司,注销,2018-05-05,60%,5000000,CNY,500万元,60%,江苏省,批发业,
+不存在公司,不存在公司,无关投资,无关投资,存续,,,,,,,,,

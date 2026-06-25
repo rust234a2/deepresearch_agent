@@ -17,13 +17,20 @@ def test_build_company_database_cli_writes_database_and_summary(tmp_path, capsys
             str(FIXTURES / "companies.csv"),
             "--contacts",
             str(FIXTURES / "contacts.csv"),
+            "--shareholders",
+            str(tmp_path / "absent_shareholders.csv"),
+            "--investments",
+            str(tmp_path / "absent_investments.csv"),
             "--output",
             str(database_path),
         ]
     )
 
     assert database_path.exists()
-    assert capsys.readouterr().out.strip() == "companies=1 contacts=1"
+    assert capsys.readouterr().out.strip() == (
+        "companies=1 contacts=1 shareholders=0 investments=0 "
+        "unresolved_shareholders=0 unresolved_investments=0"
+    )
 
 
 def test_build_company_database_script_runs_without_installed_package(tmp_path):
@@ -38,6 +45,10 @@ def test_build_company_database_script_runs_without_installed_package(tmp_path):
             str(FIXTURES / "companies.csv"),
             "--contacts",
             str(FIXTURES / "contacts.csv"),
+            "--shareholders",
+            str(tmp_path / "absent_shareholders.csv"),
+            "--investments",
+            str(tmp_path / "absent_investments.csv"),
             "--output",
             str(database_path),
         ],
@@ -48,4 +59,7 @@ def test_build_company_database_script_runs_without_installed_package(tmp_path):
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "companies=1 contacts=1"
+    assert result.stdout.strip() == (
+        "companies=1 contacts=1 shareholders=0 investments=0 "
+        "unresolved_shareholders=0 unresolved_investments=0"
+    )

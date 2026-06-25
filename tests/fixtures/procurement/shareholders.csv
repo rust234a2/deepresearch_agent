@@ -1,0 +1,4 @@
+company_name,normalized_company_name,shareholder_name,shareholder_type,shareholder_is_person,share_class,shares_held,indirect_holding_pct,associated_product
+示例科技股份有限公司,示例科技股份有限公司,张三,自然人股东,true,流通A股,1000,,
+示例科技股份有限公司,示例科技股份有限公司,示例科技股份有限公司,企业法人,false,,,,
+不存在公司,不存在公司,李四,自然人股东,true,,,,

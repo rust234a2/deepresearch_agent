@@ -16,10 +16,20 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Build the local SQLite company database.")
     parser.add_argument("--companies", default="data/procurement/processed/companies.csv")
     parser.add_argument("--contacts", default="data/procurement/processed/contacts.csv")
+    parser.add_argument("--shareholders", default="data/procurement/processed/shareholders.csv")
+    parser.add_argument("--investments", default="data/procurement/processed/investments.csv")
     parser.add_argument("--output", default="data/procurement/derived/companies.sqlite3")
     args = parser.parse_args(argv)
-    summary = build_company_database(args.companies, args.contacts, args.output)
-    print(f"companies={summary['companies']} contacts={summary['contacts']}")
+    shareholders = args.shareholders if Path(args.shareholders).is_file() else None
+    investments = args.investments if Path(args.investments).is_file() else None
+    summary = build_company_database(
+        args.companies,
+        args.contacts,
+        args.output,
+        shareholders_csv=shareholders,
+        investments_csv=investments,
+    )
+    print(" ".join(f"{key}={value}" for key, value in summary.items()))
 
 
 if __name__ == "__main__":

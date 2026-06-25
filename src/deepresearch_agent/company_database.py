@@ -40,13 +40,36 @@ def build_company_database(
     companies_csv: str | Path,
     contacts_csv: str | Path,
     output_path: str | Path,
+    shareholders_csv: str | Path | None = None,
+    investments_csv: str | Path | None = None,
 ) -> dict[str, int]:
+    from deepresearch_agent.investment_data_cleaning import OUTPUT_COLUMNS as INVESTMENT_COLUMNS
+    from deepresearch_agent.shareholder_data_cleaning import OUTPUT_COLUMNS as SHAREHOLDER_COLUMNS
+
     companies_path = Path(companies_csv)
     contacts_path = Path(contacts_csv)
     companies = _read_companies(companies_path)
     contacts = _read_contacts(contacts_path, companies)
-    _build_atomic_database(companies, contacts, companies_path, contacts_path, Path(output_path))
-    return {"companies": len(companies), "contacts": len(contacts)}
+    shareholders_path = Path(shareholders_csv) if shareholders_csv is not None else None
+    investments_path = Path(investments_csv) if investments_csv is not None else None
+    shareholders = _read_edges(shareholders_path, SHAREHOLDER_COLUMNS) if shareholders_path else []
+    investments = _read_edges(investments_path, INVESTMENT_COLUMNS) if investments_path else []
+    counts = _build_atomic_database(
+        companies,
+        contacts,
+        shareholders,
+        investments,
+        companies_path,
+        contacts_path,
+        shareholders_path,
+        investments_path,
+        Path(output_path),
+    )
+    return {"companies": len(companies), "contacts": len(contacts), **counts}
+
+
+def _read_edges(path: Path, expected_columns: list[str]) -> list[dict[str, str]]:
+    return [row for _, row in _read_csv(path, expected_columns)]
 
 
 def _read_companies(path: Path) -> list[_CompanySourceRow]:
@@ -117,10 +140,14 @@ def _read_csv(path: Path, expected_columns: list[str]) -> list[tuple[int, dict[s
 def _build_atomic_database(
     companies: list[_CompanySourceRow],
     contacts: list[_ContactSourceRow],
+    shareholders: list[dict[str, str]],
+    investments: list[dict[str, str]],
     companies_path: Path,
     contacts_path: Path,
+    shareholders_path: Path | None,
+    investments_path: Path | None,
     output_path: Path,
-) -> None:
+) -> dict[str, int]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = output_path.with_suffix(output_path.suffix + ".tmp")
     temporary_path.unlink(missing_ok=True)
@@ -133,19 +160,26 @@ def _build_atomic_database(
             _insert_companies(connection, companies)
             _insert_contacts(connection, contacts)
             _insert_scope_chunks(connection, companies)
+            legal_map, alias_map = _build_name_index(companies)
+            sh_inserted, sh_unresolved = _insert_shareholders(
+                connection, shareholders, legal_map, alias_map
+            )
+            inv_inserted, inv_unresolved = _insert_investments(
+                connection, investments, legal_map, alias_map
+            )
             connection.execute(
                 "INSERT INTO import_metadata VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     SCHEMA_VERSION,
                     _sha256(companies_path),
                     _sha256(contacts_path),
-                    None,
-                    None,
+                    _sha256(shareholders_path) if shareholders_path is not None else None,
+                    _sha256(investments_path) if investments_path is not None else None,
                     len(companies),
                     len(companies),
                     len(contacts),
-                    0,
-                    0,
+                    sh_inserted,
+                    inv_inserted,
                     datetime.now(timezone.utc).isoformat(),
                 ),
             )
@@ -158,6 +192,12 @@ def _build_atomic_database(
             connection.close()
         temporary_path.unlink(missing_ok=True)
         raise
+    return {
+        "shareholders": sh_inserted,
+        "investments": inv_inserted,
+        "unresolved_shareholders": sh_unresolved,
+        "unresolved_investments": inv_unresolved,
+    }
 
 
 def _create_schema(connection: sqlite3.Connection) -> None:
@@ -324,6 +364,115 @@ def _insert_scope_chunks(
                 "VALUES (?, ?, ?, ?, NULL)",
                 (code, chunk.section_label, chunk.ordinal, chunk.text),
             )
+
+
+def _build_name_index(
+    companies: list[_CompanySourceRow],
+) -> tuple[dict[str, str], dict[str, set[str]]]:
+    legal_map: dict[str, str] = {}
+    alias_map: dict[str, set[str]] = {}
+    for item in companies:
+        code = item.profile.unified_social_credit_code
+        legal_map[normalize_company_name(item.profile.legal_name)] = code
+        for alias in item.profile.aliases:
+            alias_map.setdefault(normalize_company_name(alias), set()).add(code)
+    return legal_map, alias_map
+
+
+def _resolve(
+    normalized_name: str,
+    legal_map: dict[str, str],
+    alias_map: dict[str, set[str]],
+) -> str | None:
+    if normalized_name in legal_map:
+        return legal_map[normalized_name]
+    codes = alias_map.get(normalized_name)
+    if codes is not None and len(codes) == 1:
+        return next(iter(codes))
+    return None
+
+
+def _insert_shareholders(
+    connection: sqlite3.Connection,
+    rows: list[dict[str, str]],
+    legal_map: dict[str, str],
+    alias_map: dict[str, set[str]],
+) -> tuple[int, int]:
+    inserted = 0
+    unresolved = 0
+    for row in rows:
+        anchor = _resolve(row["normalized_company_name"], legal_map, alias_map)
+        if anchor is None:
+            unresolved += 1
+            continue
+        holder_code: str | None = None
+        if row["shareholder_is_person"] != "true":
+            holder_code = _resolve(
+                normalize_company_name(row["shareholder_name"]), legal_map, alias_map
+            )
+        connection.execute(
+            "INSERT INTO company_shareholders "
+            "(unified_social_credit_code, shareholder_name, normalized_shareholder_name, "
+            "shareholder_credit_code, shareholder_type, shareholder_is_person, share_class, "
+            "shares_held, indirect_holding_pct, associated_product) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                anchor,
+                row["shareholder_name"],
+                normalize_company_name(row["shareholder_name"]),
+                holder_code,
+                row["shareholder_type"],
+                row["shareholder_is_person"],
+                row["share_class"],
+                row["shares_held"],
+                row["indirect_holding_pct"],
+                row["associated_product"],
+            ),
+        )
+        inserted += 1
+    return inserted, unresolved
+
+
+def _insert_investments(
+    connection: sqlite3.Connection,
+    rows: list[dict[str, str]],
+    legal_map: dict[str, str],
+    alias_map: dict[str, set[str]],
+) -> tuple[int, int]:
+    inserted = 0
+    unresolved = 0
+    for row in rows:
+        anchor = _resolve(row["normalized_company_name"], legal_map, alias_map)
+        if anchor is None:
+            unresolved += 1
+            continue
+        investee_code = _resolve(row["normalized_investee_name"], legal_map, alias_map)
+        connection.execute(
+            "INSERT INTO company_investments "
+            "(unified_social_credit_code, investee_name, normalized_investee_name, "
+            "investee_credit_code, status, investee_established_date, holding_pct, "
+            "subscribed_capital_amount, subscribed_capital_currency, subscribed_capital_original, "
+            "final_beneficiary_pct, region, industry, associated_product) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                anchor,
+                row["investee_name"],
+                row["normalized_investee_name"],
+                investee_code,
+                row["status"],
+                row["investee_established_date"],
+                row["holding_pct"],
+                row["subscribed_capital_amount"],
+                row["subscribed_capital_currency"],
+                row["subscribed_capital_original"],
+                row["final_beneficiary_pct"],
+                row["region"],
+                row["industry"],
+                row["associated_product"],
+            ),
+        )
+        inserted += 1
+    return inserted, unresolved
 
 
 def _sha256(path: Path) -> str:

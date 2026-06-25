@@ -32,7 +32,14 @@ def test_build_company_database_creates_schema_indexes_and_metadata(tmp_path):
         database_path,
     )
 
-    assert summary == {"companies": 1, "contacts": 1}
+    assert summary == {
+        "companies": 1,
+        "contacts": 1,
+        "shareholders": 0,
+        "investments": 0,
+        "unresolved_shareholders": 0,
+        "unresolved_investments": 0,
+    }
     with sqlite3.connect(database_path) as connection:
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
         assert connection.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 1
@@ -129,3 +136,54 @@ def test_failed_build_preserves_existing_database_file(tmp_path):
         build_company_database(companies_path, FIXTURES / "contacts.csv", database_path)
 
     assert database_path.read_bytes() == b"existing database sentinel"
+
+
+def test_build_company_database_ingests_ownership_resolves_and_skips(tmp_path):
+    database_path = tmp_path / "companies.sqlite3"
+
+    summary = build_company_database(
+        FIXTURES / "companies.csv",
+        FIXTURES / "contacts.csv",
+        database_path,
+        shareholders_csv=FIXTURES / "shareholders.csv",
+        investments_csv=FIXTURES / "investments.csv",
+    )
+
+    assert summary == {
+        "companies": 1,
+        "contacts": 1,
+        "shareholders": 2,
+        "investments": 2,
+        "unresolved_shareholders": 1,
+        "unresolved_investments": 1,
+    }
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM company_shareholders").fetchone()[0] == 2
+        person = connection.execute(
+            "SELECT shareholder_credit_code FROM company_shareholders WHERE shareholder_name = '张三'"
+        ).fetchone()
+        assert person == (None,)
+        entity = connection.execute(
+            "SELECT shareholder_credit_code, unified_social_credit_code "
+            "FROM company_shareholders WHERE shareholder_type = '企业法人'"
+        ).fetchone()
+        assert entity == ("91330000123456789X", "91330000123456789X")
+
+        assert connection.execute("SELECT COUNT(*) FROM company_investments").fetchone()[0] == 2
+        resolved = connection.execute(
+            "SELECT investee_credit_code FROM company_investments "
+            "WHERE investee_name = '示例科技股份有限公司'"
+        ).fetchone()
+        assert resolved == ("91330000123456789X",)
+        external = connection.execute(
+            "SELECT investee_credit_code, status FROM company_investments "
+            "WHERE investee_name = '某外部子公司有限公司'"
+        ).fetchone()
+        assert external == (None, "注销")
+
+        meta = connection.execute(
+            "SELECT shareholder_count, investment_count, shareholders_sha256 FROM import_metadata"
+        ).fetchone()
+        assert meta[0] == 2
+        assert meta[1] == 2
+        assert len(meta[2]) == 64
