@@ -1,0 +1,8 @@
+company_name,normalized_company_name,shareholder_name,shareholder_type,shareholder_is_person,share_class,shares_held,indirect_holding_pct,associated_product
+甲公司,甲公司,共同控股集团有限公司,企业法人,false,,,,
+乙公司,乙公司,共同控股集团有限公司,企业法人,false,,,,
+甲公司,甲公司,张三,自然人股东,true,,,,
+丙公司,丙公司,张三,自然人股东,true,,,,
+甲公司,甲公司,嘉实沪深300指数证券投资基金,投资基金,false,,,,
+乙公司,乙公司,嘉实沪深300指数证券投资基金,投资基金,false,,,,
+甲公司,甲公司,乙公司,企业法人,false,,,,

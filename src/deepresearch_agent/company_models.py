@@ -229,3 +229,42 @@ class OwnershipEdge(BaseModel):
     node_name: str
     node_code: str | None = None
     is_person: bool = False
+
+
+RelationType = Literal[
+    "direct_shareholder",
+    "direct_investee",
+    "shared_corporate_shareholder",
+    "shared_person_shareholder",
+    "shared_investee",
+]
+
+
+class RelatedParty(BaseModel):
+    unified_social_credit_code: str
+    related_code: str
+    related_name: str
+    relation_type: RelationType
+    via_node_name: str | None = None
+    via_is_person: bool = False
+    shared_degree: int | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    reliability_note: str
+
+
+class RelatedPartyConfig(BaseModel):
+    corporate_degree_cap: int = 10
+    investee_degree_cap: int = 10
+    noise_keywords: tuple[str, ...] = (
+        "证券投资基金",
+        "指数",
+        "etf",
+        "登记结算",
+        "中央结算",
+        "nominees",
+        "ubs",
+        "barclays",
+        "morgan",
+        "goldman",
+        "qfii",
+    )

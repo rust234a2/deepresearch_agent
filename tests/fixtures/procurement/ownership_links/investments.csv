@@ -1,0 +1,4 @@
+company_name,normalized_company_name,investee_name,normalized_investee_name,status,investee_established_date,holding_pct,subscribed_capital_amount,subscribed_capital_currency,subscribed_capital_original,final_beneficiary_pct,region,industry,associated_product
+甲公司,甲公司,共同投资标的有限公司,共同投资标的有限公司,存续,,,,,,,,,
+乙公司,乙公司,共同投资标的有限公司,共同投资标的有限公司,存续,,,,,,,,,
+甲公司,甲公司,丙公司,丙公司,存续,,,,,,,,,
