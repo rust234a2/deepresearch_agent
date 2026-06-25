@@ -13,6 +13,7 @@ from deepresearch_agent.company_models import (
     CompanyResolutionCandidate,
     ScopeChunkRecord,
     ScopeIndexMetadata,
+    ShareholderRecord,
 )
 
 
@@ -181,6 +182,19 @@ class CompanyRepository:
             chunk_count=row["chunk_count"],
             built_at=row["built_at"],
         )
+
+    def get_shareholders(self, code: str) -> list[ShareholderRecord]:
+        normalized_code = code.strip()
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT unified_social_credit_code, shareholder_name, "
+                "shareholder_credit_code, shareholder_type, shareholder_is_person, "
+                "share_class, shares_held, indirect_holding_pct, associated_product "
+                "FROM company_shareholders "
+                "WHERE unified_social_credit_code = ? ORDER BY id",
+                (normalized_code,),
+            ).fetchall()
+        return [ShareholderRecord.model_validate(dict(row)) for row in rows]
 
 
 def _drop_dominated_matches(

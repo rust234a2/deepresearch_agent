@@ -22,6 +22,18 @@ def _build_database(tmp_path: Path) -> Path:
     return database_path
 
 
+def _build_database_with_ownership(tmp_path: Path) -> Path:
+    database_path = tmp_path / "companies.sqlite3"
+    build_company_database(
+        FIXTURES / "companies.csv",
+        FIXTURES / "contacts.csv",
+        database_path,
+        shareholders_csv=FIXTURES / "shareholders.csv",
+        investments_csv=FIXTURES / "investments.csv",
+    )
+    return database_path
+
+
 def test_repository_returns_profile_aliases_and_contact(tmp_path):
     repository = CompanyRepository(_build_database(tmp_path))
 
@@ -154,3 +166,34 @@ def test_repository_rejects_unsupported_schema_version(tmp_path):
 
     with pytest.raises(RuntimeError, match="expected 3"):
         repository.resolve_text("示例科技股份有限公司")
+
+
+def test_get_shareholders_returns_ordered_records_with_person_flag(tmp_path):
+    repository = CompanyRepository(_build_database_with_ownership(tmp_path))
+
+    records = repository.get_shareholders("91330000123456789X")
+
+    assert len(records) == 2
+    person = records[0]
+    assert person.shareholder_name == "张三"
+    assert person.shareholder_is_person is True
+    assert person.shareholder_credit_code is None
+    assert person.share_class == "流通A股"
+    assert person.shares_held == "1000"
+    assert person.indirect_holding_pct is None
+    entity = records[1]
+    assert entity.shareholder_type == "企业法人"
+    assert entity.shareholder_is_person is False
+    assert entity.shareholder_credit_code == "91330000123456789X"
+
+
+def test_get_shareholders_returns_empty_for_unknown_and_edgeless(tmp_path):
+    owned_dir = tmp_path / "owned"
+    owned_dir.mkdir()
+    with_ownership = CompanyRepository(_build_database_with_ownership(owned_dir))
+    assert with_ownership.get_shareholders("missing-code") == []
+
+    plain_dir = tmp_path / "plain"
+    plain_dir.mkdir()
+    without_ownership = CompanyRepository(_build_database(plain_dir))
+    assert without_ownership.get_shareholders("91330000123456789X") == []

@@ -154,3 +154,35 @@ class ScopeIndexMetadata(BaseModel):
     normalized: bool
     chunk_count: int
     built_at: str
+
+
+class ShareholderRecord(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    unified_social_credit_code: str
+    shareholder_name: str
+    shareholder_credit_code: str | None = None
+    shareholder_type: str | None = None
+    shareholder_is_person: bool
+    share_class: str | None = None
+    shares_held: str | None = None
+    indirect_holding_pct: str | None = None
+    associated_product: str | None = None
+
+    @field_validator("shareholder_is_person", mode="before")
+    @classmethod
+    def parse_is_person(cls, value: object) -> bool:
+        return value is True or value == "true"
+
+    @field_validator(
+        "shareholder_credit_code",
+        "shareholder_type",
+        "share_class",
+        "shares_held",
+        "indirect_holding_pct",
+        "associated_product",
+        mode="before",
+    )
+    @classmethod
+    def parse_blanks(cls, value: object) -> object:
+        return none_if_blank(value)
