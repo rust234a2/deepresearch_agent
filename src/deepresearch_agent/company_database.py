@@ -11,7 +11,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from deepresearch_agent.company_data_cleaning import CONTACT_COLUMNS, CORE_COLUMNS
-from deepresearch_agent.company_models import FUND_NOISE_KEYWORDS, CompanyContact, CompanyProfile
+from deepresearch_agent.company_models import CompanyContact, CompanyProfile, external_node_id
 from deepresearch_agent.rag.chunking import chunk_business_scope
 
 
@@ -516,15 +516,7 @@ def _insert_graph_nodes(
             node["mention_count"] += 1
 
     def bump_external(display_name: str, normalized_name: str, is_person: bool) -> None:
-        if is_person:
-            node_id = f"person:{normalized_name}"
-            node_type = "person"
-        elif any(keyword in normalized_name for keyword in FUND_NOISE_KEYWORDS):
-            node_id = f"fund:{normalized_name}"
-            node_type = "fund"
-        else:
-            node_id = f"ext:{normalized_name}"
-            node_type = "company"
+        node_id, node_type = external_node_id(normalized_name, is_person)
         node = nodes.get(node_id)
         if node is None:
             nodes[node_id] = {

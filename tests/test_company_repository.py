@@ -284,3 +284,37 @@ def test_iter_investment_edges_and_company_names(tmp_path):
     assert resolved.node_code == "91330000123456789X"
     assert all(e.is_person is False for e in edges)
     assert names["91330000123456789X"] == "示例科技股份有限公司"
+
+
+_LINKS = FIXTURES / "ownership_links"
+A_CODE = "91110000000000111A"
+B_CODE = "91110000000000222B"
+C_CODE = "91110000000000333C"
+
+
+def _build_ownership_links_database(tmp_path: Path) -> Path:
+    database_path = tmp_path / "companies.sqlite3"
+    build_company_database(
+        _LINKS / "companies.csv",
+        _LINKS / "contacts.csv",
+        database_path,
+        shareholders_csv=_LINKS / "shareholders.csv",
+        investments_csv=_LINKS / "investments.csv",
+    )
+    return database_path
+
+
+def test_iter_graph_edges_maps_endpoints_to_node_ids(tmp_path):
+    repository = CompanyRepository(_build_ownership_links_database(tmp_path))
+
+    edges = repository.iter_graph_edges()
+
+    triples = {(e.source_node_id, e.target_node_id, e.edge_type) for e in edges}
+    assert ("ext:共同控股集团有限公司", A_CODE, "shareholding") in triples
+    assert (B_CODE, A_CODE, "shareholding") in triples
+    assert (A_CODE, C_CODE, "investment") in triples
+    assert (A_CODE, "ext:共同投资标的有限公司", "investment") in triples
+    fund_edge = next(
+        e for e in edges if e.source_node_id.startswith("fund:") and e.target_node_id == A_CODE
+    )
+    assert fund_edge.edge_type == "shareholding"

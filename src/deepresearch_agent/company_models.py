@@ -267,6 +267,14 @@ FUND_NOISE_KEYWORDS = (
 )
 
 
+def external_node_id(normalized_name: str, is_person: bool) -> tuple[str, str]:
+    if is_person:
+        return f"person:{normalized_name}", "person"
+    if any(keyword in normalized_name for keyword in FUND_NOISE_KEYWORDS):
+        return f"fund:{normalized_name}", "fund"
+    return f"ext:{normalized_name}", "company"
+
+
 class RelatedPartyConfig(BaseModel):
     corporate_degree_cap: int = 10
     investee_degree_cap: int = 10
@@ -282,3 +290,16 @@ class GraphNode(BaseModel):
     unified_social_credit_code: str | None = None
     is_person: bool = False
     mention_count: int
+
+
+class GraphEdge(BaseModel):
+    source_node_id: str
+    target_node_id: str
+    edge_type: Literal["shareholding", "investment"]
+    holding_pct: str | None = None
+    status: str | None = None
+
+    @field_validator("holding_pct", "status", mode="before")
+    @classmethod
+    def parse_blanks(cls, value: object) -> object:
+        return none_if_blank(value)

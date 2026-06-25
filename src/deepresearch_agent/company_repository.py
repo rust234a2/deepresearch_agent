@@ -11,12 +11,14 @@ from deepresearch_agent.company_models import (
     CompanyRecord,
     CompanyResolution,
     CompanyResolutionCandidate,
+    GraphEdge,
     GraphNode,
     InvestmentRecord,
     OwnershipEdge,
     ScopeChunkRecord,
     ScopeIndexMetadata,
     ShareholderRecord,
+    external_node_id,
 )
 
 
@@ -271,6 +273,42 @@ class CompanyRepository:
                 "unified_social_credit_code, is_person, mention_count FROM graph_nodes"
             ).fetchall()
         return [_graph_node_from_row(row) for row in rows]
+
+    def iter_graph_edges(self) -> list[GraphEdge]:
+        edges: list[GraphEdge] = []
+        with self._connect() as connection:
+            for anchor, normalized, code, is_person, pct in connection.execute(
+                "SELECT unified_social_credit_code, normalized_shareholder_name, "
+                "shareholder_credit_code, shareholder_is_person, indirect_holding_pct "
+                "FROM company_shareholders"
+            ).fetchall():
+                source = (
+                    code if code is not None else external_node_id(normalized, is_person == "true")[0]
+                )
+                edges.append(
+                    GraphEdge(
+                        source_node_id=source,
+                        target_node_id=anchor,
+                        edge_type="shareholding",
+                        holding_pct=pct,
+                        status=None,
+                    )
+                )
+            for anchor, normalized, code, pct, status in connection.execute(
+                "SELECT unified_social_credit_code, normalized_investee_name, "
+                "investee_credit_code, holding_pct, status FROM company_investments"
+            ).fetchall():
+                target = code if code is not None else external_node_id(normalized, False)[0]
+                edges.append(
+                    GraphEdge(
+                        source_node_id=anchor,
+                        target_node_id=target,
+                        edge_type="investment",
+                        holding_pct=pct,
+                        status=status,
+                    )
+                )
+        return edges
 
 
 def _drop_dominated_matches(
