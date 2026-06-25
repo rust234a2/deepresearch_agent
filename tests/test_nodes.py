@@ -44,7 +44,7 @@ def test_planner_does_not_plan_unknown_company(company_database_path):
     assert updated.supplier_resolution.status == "not_found"
 
 
-def test_researcher_collects_six_source_backed_dimensions(company_database_path):
+def test_researcher_collects_all_source_backed_dimensions(company_database_path):
     repository = _repository(company_database_path)
     state = planner_node(
         ResearchState(question="核验示例科技股份有限公司", domain="procurement"),
@@ -64,7 +64,55 @@ def test_researcher_collects_six_source_backed_dimensions(company_database_path)
     assert {item.tool_name for item in updated.trace} == {
         "get_company_profile",
         "get_company_contact",
+        "get_ownership_neighborhood",
+        "get_related_parties",
     }
+
+
+def test_researcher_emits_ownership_fallback_when_no_ownership_data(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="核验示例科技股份有限公司", domain="procurement"),
+        DOMAIN_PACK,
+        repository,
+    )
+
+    updated = researcher_node(state, build_procurement_tool_registry(repository), DOMAIN_PACK)
+
+    ownership = [e for e in updated.evidence if e.dimension == "ownership_structure"]
+    related = [e for e in updated.evidence if e.dimension == "related_parties"]
+    assert len(ownership) == 1 and "数据源未提供" in ownership[0].claim
+    assert len(related) == 1 and "数据源未发现" in related[0].claim
+
+
+def test_researcher_emits_related_parties_with_low_confidence_clues(tmp_path):
+    from deepresearch_agent.company_database import build_company_database
+
+    fixtures = Path(__file__).parent / "fixtures" / "procurement" / "ownership_links"
+    database_path = tmp_path / "companies.sqlite3"
+    build_company_database(
+        fixtures / "companies.csv",
+        fixtures / "contacts.csv",
+        database_path,
+        shareholders_csv=fixtures / "shareholders.csv",
+        investments_csv=fixtures / "investments.csv",
+    )
+    repository = _repository(database_path)
+    state = planner_node(
+        ResearchState(question="核验甲公司", domain="procurement"),
+        DOMAIN_PACK,
+        repository,
+    )
+
+    updated = researcher_node(state, build_procurement_tool_registry(repository), DOMAIN_PACK)
+
+    related = [e for e in updated.evidence if e.dimension == "related_parties"]
+    assert related
+    person = next(e for e in related if "共同自然人" in e.claim)
+    assert person.confidence == 0.2
+    assert "须人工复核" in person.claim
+    ownership = [e for e in updated.evidence if e.dimension == "ownership_structure"]
+    assert any("股东" in e.claim or "对外投资" in e.claim for e in ownership)
 
 
 def test_researcher_respects_tool_allowlist(company_database_path):

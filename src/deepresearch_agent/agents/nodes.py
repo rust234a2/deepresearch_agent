@@ -23,6 +23,16 @@ _DIMENSION_QUESTIONS = {
     "industry_and_business_scope": "What industry and business scope is registered for {supplier_name}?",
     "enterprise_scale": "What enterprise scale and employee data exists for {supplier_name}?",
     "contact": "What source-backed contact data exists for {supplier_name}?",
+    "ownership_structure": "What registered shareholders and outbound investments exist for {supplier_name}?",
+    "related_parties": "What related parties can be inferred for {supplier_name} from shared ownership?",
+}
+
+_RELATION_LABELS = {
+    "direct_shareholder": "直接股东",
+    "direct_investee": "直接被投资",
+    "shared_corporate_shareholder": "共同企业股东",
+    "shared_person_shareholder": "共同自然人(疑似)",
+    "shared_investee": "共同对外投资",
 }
 
 
@@ -80,6 +90,26 @@ def researcher_node(
         if result is not None and result.status == "ok":
             _append_contact_evidence(state, result.data)
 
+    if "get_ownership_neighborhood" in domain_pack.allowed_tools:
+        result = _run_tool(
+            state,
+            tools,
+            "get_ownership_neighborhood",
+            {"credit_code": state.company_credit_code},
+        )
+        if result is not None and result.status == "ok":
+            _append_ownership_evidence(state, result.data)
+
+    if "get_related_parties" in domain_pack.allowed_tools:
+        result = _run_tool(
+            state,
+            tools,
+            "get_related_parties",
+            {"credit_code": state.company_credit_code},
+        )
+        if result is not None and result.status == "ok":
+            _append_related_parties_evidence(state, result.data)
+
     state.iteration += 1
     return state
 
@@ -107,6 +137,9 @@ def writer_node(state: ResearchState, domain_pack: DomainPack) -> ResearchState:
             "接入产能、交期与质量认证数据。",
             "接入内部采购履约数据。",
         ]
+    )
+    open_questions.append(
+        "股权关联方为线索级推断（尤其同名自然人），须人工复核，不构成控制关系或采购结论。"
     )
     state.report = SupplierReport(
         supplier_name=state.supplier_name,
@@ -273,6 +306,56 @@ def _append_contact_evidence(state: ResearchState, data: dict) -> None:
     if parts:
         text = "；".join(parts)
         _append_fact(state, "contact", text, text)
+
+
+def _append_ownership_evidence(state: ResearchState, data: dict) -> None:
+    appended = False
+    for shareholder in data.get("shareholders", []):
+        parts = [f"股东：{shareholder['shareholder_name']}"]
+        if shareholder.get("shareholder_type"):
+            parts.append(f"类型：{shareholder['shareholder_type']}")
+        if shareholder.get("shares_held"):
+            parts.append(f"持股数：{shareholder['shares_held']}")
+        text = "；".join(parts)
+        _append_fact(state, "ownership_structure", text, text)
+        appended = True
+    for investment in data.get("investments", []):
+        parts = [f"对外投资：{investment['investee_name']}"]
+        if investment.get("status"):
+            parts.append(f"状态：{investment['status']}")
+        if investment.get("holding_pct"):
+            parts.append(f"持股比例：{investment['holding_pct']}")
+        text = "；".join(parts)
+        _append_fact(state, "ownership_structure", text, text)
+        appended = True
+    if not appended:
+        text = f"数据源未提供 {state.supplier_name} 的股东或对外投资数据。"
+        _append_fact(state, "ownership_structure", text, text)
+
+
+def _append_related_parties_evidence(state: ResearchState, data: dict) -> None:
+    parties = data.get("related_parties", [])
+    if not parties:
+        text = f"数据源未发现 {state.supplier_name} 的可推断关联方。"
+        _append_fact(state, "related_parties", text, text)
+        return
+    for party in parties:
+        label = _RELATION_LABELS.get(party["relation_type"], party["relation_type"])
+        claim = f"关联方：{party['related_name']}（{label}）。{party['reliability_note']}"
+        _append_evidence(
+            state,
+            Evidence(
+                claim=claim,
+                dimension="related_parties",
+                confidence=party["confidence"],
+                citation=Citation(
+                    source_id=f"company:{state.company_credit_code}",
+                    title=f"{state.supplier_name} 股权关联",
+                    url=f"local://companies/{state.company_credit_code}",
+                    snippet=party["reliability_note"],
+                ),
+            ),
+        )
 
 
 def _append_fact(state: ResearchState, dimension: str, claim: str, snippet: str) -> None:
