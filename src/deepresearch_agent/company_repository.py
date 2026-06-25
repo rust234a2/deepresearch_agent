@@ -11,6 +11,7 @@ from deepresearch_agent.company_models import (
     CompanyRecord,
     CompanyResolution,
     CompanyResolutionCandidate,
+    InvestmentRecord,
     ScopeChunkRecord,
     ScopeIndexMetadata,
     ShareholderRecord,
@@ -195,6 +196,20 @@ class CompanyRepository:
                 (normalized_code,),
             ).fetchall()
         return [ShareholderRecord.model_validate(dict(row)) for row in rows]
+
+    def get_investments(self, code: str) -> list[InvestmentRecord]:
+        normalized_code = code.strip()
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT unified_social_credit_code, investee_name, investee_credit_code, "
+                "status, investee_established_date, holding_pct, subscribed_capital_amount, "
+                "subscribed_capital_currency, subscribed_capital_original, "
+                "final_beneficiary_pct, region, industry, associated_product "
+                "FROM company_investments "
+                "WHERE unified_social_credit_code = ? ORDER BY id",
+                (normalized_code,),
+            ).fetchall()
+        return [InvestmentRecord.model_validate(dict(row)) for row in rows]
 
 
 def _drop_dominated_matches(

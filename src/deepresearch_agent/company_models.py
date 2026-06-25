@@ -186,3 +186,39 @@ class ShareholderRecord(BaseModel):
     @classmethod
     def parse_blanks(cls, value: object) -> object:
         return none_if_blank(value)
+
+
+class InvestmentRecord(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    unified_social_credit_code: str
+    investee_name: str
+    investee_credit_code: str | None = None
+    status: str | None = None
+    investee_established_date: str | None = None
+    holding_pct: str | None = None
+    subscribed_capital_amount: str | None = None
+    subscribed_capital_currency: str | None = None
+    subscribed_capital_original: str | None = None
+    final_beneficiary_pct: str | None = None
+    region: str | None = None
+    industry: str | None = None
+    associated_product: str | None = None
+
+    @field_validator(
+        "investee_credit_code",
+        "status",
+        "investee_established_date",
+        "holding_pct",
+        "subscribed_capital_amount",
+        "subscribed_capital_currency",
+        "subscribed_capital_original",
+        "final_beneficiary_pct",
+        "region",
+        "industry",
+        "associated_product",
+        mode="before",
+    )
+    @classmethod
+    def parse_blanks(cls, value: object) -> object:
+        return none_if_blank(value)

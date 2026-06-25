@@ -197,3 +197,33 @@ def test_get_shareholders_returns_empty_for_unknown_and_edgeless(tmp_path):
     plain_dir.mkdir()
     without_ownership = CompanyRepository(_build_database(plain_dir))
     assert without_ownership.get_shareholders("91330000123456789X") == []
+
+
+def test_get_investments_returns_records_with_resolution(tmp_path):
+    repository = CompanyRepository(_build_database_with_ownership(tmp_path))
+
+    records = repository.get_investments("91330000123456789X")
+
+    assert len(records) == 2
+    resolved = records[0]
+    assert resolved.investee_name == "示例科技股份有限公司"
+    assert resolved.investee_credit_code == "91330000123456789X"
+    assert resolved.status == "存续"
+    assert resolved.holding_pct == "100%"
+    external = records[1]
+    assert external.investee_name == "某外部子公司有限公司"
+    assert external.investee_credit_code is None
+    assert external.status == "注销"
+    assert external.subscribed_capital_original == "500万元"
+
+
+def test_get_investments_returns_empty_for_unknown_and_edgeless(tmp_path):
+    owned_dir = tmp_path / "owned"
+    owned_dir.mkdir()
+    with_ownership = CompanyRepository(_build_database_with_ownership(owned_dir))
+    assert with_ownership.get_investments("missing-code") == []
+
+    plain_dir = tmp_path / "plain"
+    plain_dir.mkdir()
+    without_ownership = CompanyRepository(_build_database(plain_dir))
+    assert without_ownership.get_investments("91330000123456789X") == []
