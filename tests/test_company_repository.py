@@ -164,8 +164,38 @@ def test_repository_rejects_unsupported_schema_version(tmp_path):
         connection.execute("PRAGMA user_version = 99")
     repository = CompanyRepository(database_path)
 
-    with pytest.raises(RuntimeError, match="expected 3"):
+    with pytest.raises(RuntimeError, match="expected 4"):
         repository.resolve_text("示例科技股份有限公司")
+
+
+def test_get_graph_node_returns_typed_nodes(tmp_path):
+    repository = CompanyRepository(_build_database_with_ownership(tmp_path))
+
+    company = repository.get_graph_node("91330000123456789X")
+    assert company is not None
+    assert company.node_type == "company"
+    assert company.in_database is True
+    assert company.unified_social_credit_code == "91330000123456789X"
+
+    person = repository.get_graph_node("person:张三")
+    assert person is not None
+    assert person.node_type == "person"
+    assert person.is_person is True
+
+    assert repository.get_graph_node("no-such-node") is None
+
+
+def test_iter_graph_nodes_returns_all_nodes(tmp_path):
+    repository = CompanyRepository(_build_database_with_ownership(tmp_path))
+
+    nodes = repository.iter_graph_nodes()
+
+    assert len(nodes) == 3
+    assert "91330000123456789X" in {node.node_id for node in nodes}
+    assert "person:张三" in {node.node_id for node in nodes}
+    assert any(
+        node.display_name == "某外部子公司有限公司" and not node.in_database for node in nodes
+    )
 
 
 def test_get_shareholders_returns_ordered_records_with_person_flag(tmp_path):

@@ -11,6 +11,7 @@ from deepresearch_agent.company_models import (
     CompanyRecord,
     CompanyResolution,
     CompanyResolutionCandidate,
+    GraphNode,
     InvestmentRecord,
     OwnershipEdge,
     ScopeChunkRecord,
@@ -251,6 +252,26 @@ class CompanyRepository:
             for row in rows
         ]
 
+    def get_graph_node(self, node_id: str) -> GraphNode | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT node_id, display_name, normalized_name, node_type, in_database, "
+                "unified_social_credit_code, is_person, mention_count "
+                "FROM graph_nodes WHERE node_id = ?",
+                (node_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return _graph_node_from_row(row)
+
+    def iter_graph_nodes(self) -> list[GraphNode]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT node_id, display_name, normalized_name, node_type, in_database, "
+                "unified_social_credit_code, is_person, mention_count FROM graph_nodes"
+            ).fetchall()
+        return [_graph_node_from_row(row) for row in rows]
+
 
 def _drop_dominated_matches(
     matches: dict[str, tuple[str, str, str]],
@@ -275,6 +296,19 @@ def _drop_dominated_matches(
             continue
         kept[code] = value
     return kept
+
+
+def _graph_node_from_row(row: sqlite3.Row) -> GraphNode:
+    return GraphNode(
+        node_id=row["node_id"],
+        display_name=row["display_name"],
+        normalized_name=row["normalized_name"],
+        node_type=row["node_type"],
+        in_database=bool(row["in_database"]),
+        unified_social_credit_code=row["unified_social_credit_code"],
+        is_person=bool(row["is_person"]),
+        mention_count=row["mention_count"],
+    )
 
 
 def _contains_name(text: str, candidate: str) -> bool:
