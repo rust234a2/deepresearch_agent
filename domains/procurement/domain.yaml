@@ -7,9 +7,13 @@ research_dimensions:
   - industry_and_business_scope
   - enterprise_scale
   - contact
+  - ownership_structure
+  - related_parties
 allowed_tools:
   - get_company_profile
   - get_company_contact
+  - get_ownership_neighborhood
+  - get_related_parties
 report_sections:
   - Executive Summary
   - Company Identity
@@ -18,6 +22,8 @@ report_sections:
   - Industry and Business Scope
   - Enterprise Scale
   - Contact
+  - Ownership Structure
+  - Related Parties
   - Evidence Table
   - Open Questions
 source_priority:

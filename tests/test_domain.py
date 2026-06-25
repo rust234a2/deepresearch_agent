@@ -13,8 +13,15 @@ def test_load_procurement_domain_pack_uses_source_backed_dimensions():
         "industry_and_business_scope",
         "enterprise_scale",
         "contact",
+        "ownership_structure",
+        "related_parties",
     ]
-    assert pack.allowed_tools == ["get_company_profile", "get_company_contact"]
+    assert pack.allowed_tools == [
+        "get_company_profile",
+        "get_company_contact",
+        "get_ownership_neighborhood",
+        "get_related_parties",
+    ]
 
 
 def test_domain_pack_does_not_claim_unsupported_compliance_evidence():
