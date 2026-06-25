@@ -34,7 +34,7 @@ def test_build_company_database_creates_schema_indexes_and_metadata(tmp_path):
 
     assert summary == {"companies": 1, "contacts": 1}
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
         assert connection.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 1
         assert connection.execute("SELECT COUNT(*) FROM company_aliases").fetchone()[0] == 2
         assert connection.execute("SELECT COUNT(*) FROM company_contacts").fetchone()[0] == 1
@@ -55,6 +55,13 @@ def test_build_company_database_creates_schema_indexes_and_metadata(tmp_path):
         assert metadata[:2] == (1, 1)
         assert len(metadata[2]) == 64
         assert len(metadata[3]) == 64
+        assert connection.execute("SELECT COUNT(*) FROM company_shareholders").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM company_investments").fetchone()[0] == 0
+        ownership_meta = connection.execute(
+            "SELECT shareholder_count, investment_count, shareholders_sha256, investments_sha256 "
+            "FROM import_metadata"
+        ).fetchone()
+        assert ownership_meta == (0, 0, None, None)
         indexes = {
             row[0]
             for row in connection.execute(
@@ -67,6 +74,10 @@ def test_build_company_database_creates_schema_indexes_and_metadata(tmp_path):
         "idx_companies_industry_division",
         "idx_companies_enterprise_size",
         "idx_company_aliases_normalized",
+        "idx_shareholders_company",
+        "idx_shareholders_holder_code",
+        "idx_investments_company",
+        "idx_investments_investee_code",
     } <= indexes
 
 

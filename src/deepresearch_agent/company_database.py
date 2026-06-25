@@ -15,7 +15,7 @@ from deepresearch_agent.company_models import CompanyContact, CompanyProfile
 from deepresearch_agent.rag.chunking import chunk_business_scope
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -134,14 +134,18 @@ def _build_atomic_database(
             _insert_contacts(connection, contacts)
             _insert_scope_chunks(connection, companies)
             connection.execute(
-                "INSERT INTO import_metadata VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO import_metadata VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     SCHEMA_VERSION,
                     _sha256(companies_path),
                     _sha256(contacts_path),
+                    None,
+                    None,
                     len(companies),
                     len(companies),
                     len(contacts),
+                    0,
+                    0,
                     datetime.now(timezone.utc).isoformat(),
                 ),
             )
@@ -189,9 +193,13 @@ def _create_schema(connection: sqlite3.Connection) -> None:
             schema_version INTEGER NOT NULL,
             companies_sha256 TEXT NOT NULL,
             contacts_sha256 TEXT NOT NULL,
+            shareholders_sha256 TEXT,
+            investments_sha256 TEXT,
             input_company_count INTEGER NOT NULL,
             company_count INTEGER NOT NULL,
             contact_count INTEGER NOT NULL,
+            shareholder_count INTEGER NOT NULL,
+            investment_count INTEGER NOT NULL,
             generated_at TEXT NOT NULL
         );
         CREATE INDEX idx_companies_registration_status
@@ -222,6 +230,46 @@ def _create_schema(connection: sqlite3.Connection) -> None:
             chunk_count INTEGER NOT NULL,
             built_at TEXT NOT NULL
         );
+        CREATE TABLE company_shareholders (
+            id INTEGER PRIMARY KEY,
+            unified_social_credit_code TEXT NOT NULL
+                REFERENCES companies(unified_social_credit_code),
+            shareholder_name TEXT NOT NULL,
+            normalized_shareholder_name TEXT NOT NULL,
+            shareholder_credit_code TEXT,
+            shareholder_type TEXT,
+            shareholder_is_person TEXT NOT NULL,
+            share_class TEXT,
+            shares_held TEXT,
+            indirect_holding_pct TEXT,
+            associated_product TEXT
+        );
+        CREATE INDEX idx_shareholders_company
+            ON company_shareholders(unified_social_credit_code);
+        CREATE INDEX idx_shareholders_holder_code
+            ON company_shareholders(shareholder_credit_code);
+        CREATE TABLE company_investments (
+            id INTEGER PRIMARY KEY,
+            unified_social_credit_code TEXT NOT NULL
+                REFERENCES companies(unified_social_credit_code),
+            investee_name TEXT NOT NULL,
+            normalized_investee_name TEXT NOT NULL,
+            investee_credit_code TEXT,
+            status TEXT,
+            investee_established_date TEXT,
+            holding_pct TEXT,
+            subscribed_capital_amount TEXT,
+            subscribed_capital_currency TEXT,
+            subscribed_capital_original TEXT,
+            final_beneficiary_pct TEXT,
+            region TEXT,
+            industry TEXT,
+            associated_product TEXT
+        );
+        CREATE INDEX idx_investments_company
+            ON company_investments(unified_social_credit_code);
+        CREATE INDEX idx_investments_investee_code
+            ON company_investments(investee_credit_code);
         """
     )
 

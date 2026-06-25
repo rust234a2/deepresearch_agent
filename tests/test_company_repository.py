@@ -152,5 +152,5 @@ def test_repository_rejects_unsupported_schema_version(tmp_path):
         connection.execute("PRAGMA user_version = 99")
     repository = CompanyRepository(database_path)
 
-    with pytest.raises(RuntimeError, match="expected 2"):
+    with pytest.raises(RuntimeError, match="expected 3"):
         repository.resolve_text("示例科技股份有限公司")
