@@ -222,3 +222,10 @@ class InvestmentRecord(BaseModel):
     @classmethod
     def parse_blanks(cls, value: object) -> object:
         return none_if_blank(value)
+
+
+class OwnershipEdge(BaseModel):
+    company_code: str
+    node_name: str
+    node_code: str | None = None
+    is_person: bool = False

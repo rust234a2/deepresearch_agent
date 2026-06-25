@@ -12,6 +12,7 @@ from deepresearch_agent.company_models import (
     CompanyResolution,
     CompanyResolutionCandidate,
     InvestmentRecord,
+    OwnershipEdge,
     ScopeChunkRecord,
     ScopeIndexMetadata,
     ShareholderRecord,
@@ -210,6 +211,45 @@ class CompanyRepository:
                 (normalized_code,),
             ).fetchall()
         return [InvestmentRecord.model_validate(dict(row)) for row in rows]
+
+    def get_all_company_names(self) -> dict[str, str]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT unified_social_credit_code, legal_name FROM companies"
+            ).fetchall()
+        return {row["unified_social_credit_code"]: row["legal_name"] for row in rows}
+
+    def iter_shareholder_edges(self) -> list[OwnershipEdge]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT unified_social_credit_code, normalized_shareholder_name, "
+                "shareholder_credit_code, shareholder_is_person FROM company_shareholders"
+            ).fetchall()
+        return [
+            OwnershipEdge(
+                company_code=row["unified_social_credit_code"],
+                node_name=row["normalized_shareholder_name"],
+                node_code=row["shareholder_credit_code"],
+                is_person=row["shareholder_is_person"] == "true",
+            )
+            for row in rows
+        ]
+
+    def iter_investment_edges(self) -> list[OwnershipEdge]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT unified_social_credit_code, normalized_investee_name, "
+                "investee_credit_code FROM company_investments"
+            ).fetchall()
+        return [
+            OwnershipEdge(
+                company_code=row["unified_social_credit_code"],
+                node_name=row["normalized_investee_name"],
+                node_code=row["investee_credit_code"],
+                is_person=False,
+            )
+            for row in rows
+        ]
 
 
 def _drop_dominated_matches(

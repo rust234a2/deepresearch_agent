@@ -227,3 +227,30 @@ def test_get_investments_returns_empty_for_unknown_and_edgeless(tmp_path):
     plain_dir.mkdir()
     without_ownership = CompanyRepository(_build_database(plain_dir))
     assert without_ownership.get_investments("91330000123456789X") == []
+
+
+def test_iter_shareholder_edges_returns_normalized_nodes(tmp_path):
+    repository = CompanyRepository(_build_database_with_ownership(tmp_path))
+
+    edges = repository.iter_shareholder_edges()
+
+    assert len(edges) == 2
+    person = next(e for e in edges if e.node_name == "张三")
+    assert person.company_code == "91330000123456789X"
+    assert person.is_person is True
+    assert person.node_code is None
+    entity = next(e for e in edges if e.is_person is False)
+    assert entity.node_code == "91330000123456789X"
+
+
+def test_iter_investment_edges_and_company_names(tmp_path):
+    repository = CompanyRepository(_build_database_with_ownership(tmp_path))
+
+    edges = repository.iter_investment_edges()
+    names = repository.get_all_company_names()
+
+    assert len(edges) == 2
+    resolved = next(e for e in edges if e.node_code is not None)
+    assert resolved.node_code == "91330000123456789X"
+    assert all(e.is_person is False for e in edges)
+    assert names["91330000123456789X"] == "示例科技股份有限公司"
