@@ -132,3 +132,68 @@ def ultimate_controllers(
             )
     results.sort(key=lambda c: (c.depth, c.node_id))
     return results
+
+
+def common_controllers(
+    graph: OwnershipGraph,
+    node_a: str,
+    node_b: str,
+    max_depth: int = 5,
+    block_expand_types: tuple[str, ...] = DEFAULT_BLOCK_EXPAND_TYPES,
+) -> list[CommonController]:
+    up_a = _upward_reachable(graph, node_a, max_depth, block_expand_types)
+    up_b = _upward_reachable(graph, node_b, max_depth, block_expand_types)
+    shared = (set(up_a) & set(up_b)) - {node_a, node_b}
+    results: list[CommonController] = []
+    for nid in shared:
+        depth_a, via_a = up_a[nid]
+        depth_b, via_b = up_b[nid]
+        results.append(
+            CommonController(
+                node_id=nid,
+                display_name=_display(graph, nid),
+                depth_from_a=depth_a,
+                depth_from_b=depth_b,
+                via_person=via_a or via_b,
+            )
+        )
+    results.sort(key=lambda c: (c.depth_from_a + c.depth_from_b, c.node_id))
+    return results
+
+
+def shortest_path(
+    graph: OwnershipGraph,
+    node_a: str,
+    node_b: str,
+    max_depth: int = 6,
+    block_expand_types: tuple[str, ...] = DEFAULT_BLOCK_EXPAND_TYPES,
+) -> GraphPath | None:
+    if node_a == node_b:
+        if node_a not in graph.nodes:
+            return None
+        return GraphPath(node_ids=[node_a], length=0, via_person=_is_person(graph, node_a))
+    parents: dict[str, str | None] = {node_a: None}
+    queue: deque[tuple[str, int]] = deque([(node_a, 0)])
+    while queue:
+        current, depth = queue.popleft()
+        if depth >= max_depth:
+            continue
+        if current != node_a and _node_type(graph, current) in block_expand_types:
+            continue
+        neighbors = {edge.target_node_id for edge in graph.successors(current)}
+        neighbors |= {edge.source_node_id for edge in graph.predecessors(current)}
+        for neighbor in sorted(neighbors):
+            if neighbor in parents:
+                continue
+            parents[neighbor] = current
+            if neighbor == node_b:
+                path = [node_b]
+                cursor: str | None = current
+                while cursor is not None:
+                    path.append(cursor)
+                    cursor = parents[cursor]
+                path.reverse()
+                via = any(_is_person(graph, n) for n in path)
+                return GraphPath(node_ids=path, length=len(path) - 1, via_person=via)
+            queue.append((neighbor, depth + 1))
+    return None

@@ -4,7 +4,9 @@ from deepresearch_agent.company_database import build_company_database
 from deepresearch_agent.company_models import GraphEdge, GraphNode
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.graph_traversal import (
+    common_controllers,
     ego_graph,
+    shortest_path,
     ultimate_controllers,
 )
 from deepresearch_agent.ownership_graph import OwnershipGraph, load_ownership_graph
@@ -87,3 +89,46 @@ def test_ultimate_controllers(tmp_path):
     assert "person:张三" in by_id
     assert by_id["person:张三"].via_person is True
     assert B_CODE not in by_id
+
+
+def test_common_controllers_company_via_non_person(tmp_path):
+    graph = _graph(tmp_path)
+
+    common = common_controllers(graph, A_CODE, B_CODE)
+
+    by_id = {c.node_id: c for c in common}
+    assert "ext:共同控股集团有限公司" in by_id
+    assert by_id["ext:共同控股集团有限公司"].via_person is False
+    assert A_CODE not in by_id and B_CODE not in by_id
+
+
+def test_common_controllers_person_low_confidence(tmp_path):
+    graph = _graph(tmp_path)
+
+    common = common_controllers(graph, A_CODE, C_CODE)
+
+    by_id = {c.node_id: c for c in common}
+    assert "person:张三" in by_id
+    assert by_id["person:张三"].via_person is True
+
+
+def test_shortest_path_direct_and_two_hop(tmp_path):
+    graph = _graph(tmp_path)
+
+    direct = shortest_path(graph, A_CODE, C_CODE)
+    assert direct is not None
+    assert direct.node_ids == [A_CODE, C_CODE]
+    assert direct.length == 1
+
+    two_hop = shortest_path(graph, B_CODE, C_CODE)
+    assert two_hop is not None
+    assert two_hop.node_ids[0] == B_CODE and two_hop.node_ids[-1] == C_CODE
+    assert two_hop.length == 2
+
+
+def test_shortest_path_edges_unknown_and_same(tmp_path):
+    graph = _graph(tmp_path)
+
+    same = shortest_path(graph, A_CODE, A_CODE)
+    assert same is not None and same.node_ids == [A_CODE] and same.length == 0
+    assert shortest_path(graph, A_CODE, "no-such-node") is None
