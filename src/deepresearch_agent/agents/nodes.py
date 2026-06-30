@@ -5,10 +5,13 @@ from deepresearch_agent.domain import DomainPack
 from deepresearch_agent.state import (
     Citation,
     Evidence,
+    GraphSearchCandidate,
+    GraphSearchReport,
     ResearchPlanItem,
     ResearchState,
     ScopeCandidate,
     ScopeSearchReport,
+    SharedControllerFinding,
     SupplierReport,
     ToolTrace,
 )
@@ -232,6 +235,86 @@ def _group_scope_hits(hits) -> list[ScopeCandidate]:
             candidate.matched_clauses.append(evidence)
             candidate.top_score = max(candidate.top_score, hit.score)
     return list(grouped.values())
+
+
+_GRAPH_OPEN_QUESTIONS = [
+    "经营范围匹配仅为登记信息，不代表实际产能、交期或质量。",
+    "共享控制人为线索级推断（尤其同名自然人），须人工复核，不构成围标认定。",
+    "接入制裁和监管名单数据。",
+    "接入司法案件与负面新闻数据。",
+    "接入财务数据。",
+    "接入产能、交期与质量认证数据。",
+    "接入内部采购履约数据。",
+]
+
+
+def graph_search_node(state: ResearchState, searcher) -> ResearchState:
+    if searcher is None:
+        state.graph_report = GraphSearchReport(
+            query=state.question,
+            summary="图谱关系检索不可用：请安装 .[rag] 可选依赖并构建 FAISS 经营范围索引与公司图谱。",
+            candidates=[],
+            shared_controllers=[],
+            open_questions=["安装 .[rag] 可选依赖并构建 FAISS 索引。"],
+        )
+        return state
+
+    try:
+        context = searcher(state.question)
+    except Exception as exc:  # 检索期异常兜底为不可用报告
+        state.graph_report = GraphSearchReport(
+            query=state.question,
+            summary=f"图谱关系检索失败：{exc}",
+            candidates=[],
+            shared_controllers=[],
+            open_questions=["检查 .[rag] 依赖、FAISS 索引与公司图谱后重试。"],
+        )
+        return state
+
+    name_by_code = {seed.code: seed.name for seed in context.seeds}
+    candidates = [
+        GraphSearchCandidate(
+            unified_social_credit_code=seed.code,
+            legal_name=seed.name,
+            top_score=seed.score,
+            ultimate_controllers=[
+                f"{controller.display_name}（疑·须人工复核）"
+                if controller.via_person
+                else controller.display_name
+                for controller in seed.controllers
+            ],
+        )
+        for seed in context.seeds
+    ]
+    shared = [
+        SharedControllerFinding(
+            controller_name=item.name,
+            controlled_companies=[name_by_code.get(code, code) for code in item.controlled_seeds],
+            via_person=item.via_person,
+            note="经同名自然人推断，须人工复核" if item.via_person else "经企业股权链推断",
+        )
+        for item in context.shared_controllers
+    ]
+    if candidates:
+        if shared:
+            middle = f"其中 {len(shared)} 组疑似共享控制人（围标/集中度线索，须人工复核）；"
+        else:
+            middle = "未发现候选间共享控制人；"
+        summary = (
+            f"按经营范围语义检索到 {len(candidates)} 家候选；"
+            + middle
+            + "现有数据不足以作出采购批准或风险结论。"
+        )
+    else:
+        summary = "未检索到经营范围匹配的企业。"
+    state.graph_report = GraphSearchReport(
+        query=state.question,
+        summary=summary,
+        candidates=candidates,
+        shared_controllers=shared,
+        open_questions=list(_GRAPH_OPEN_QUESTIONS),
+    )
+    return state
 
 
 def _append_profile_evidence(state: ResearchState, data: dict) -> None:

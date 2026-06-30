@@ -2,6 +2,8 @@ from pathlib import Path
 
 from deepresearch_agent.agents.nodes import critique_node, planner_node, researcher_node, writer_node
 from deepresearch_agent.company_repository import CompanyRepository
+from deepresearch_agent.graph_retrieval import assemble_subgraph_context
+from deepresearch_agent.ownership_graph import load_ownership_graph
 from deepresearch_agent.domain import load_domain_pack
 from deepresearch_agent.state import ResearchState
 from deepresearch_agent.tools.base import RegisteredTool, ToolRegistry
@@ -265,3 +267,55 @@ def test_writer_never_approves_from_registration_data_only(company_database_path
     assert updated.report.evidence_table
     assert any("不能据此作出采购批准" in risk for risk in updated.report.risks)
     assert not any("未发现风险" in risk for risk in updated.report.risks)
+
+
+_LINKS = Path("tests/fixtures/procurement/ownership_links")
+
+
+def _ownership_graph(tmp_path):
+    from deepresearch_agent.company_database import build_company_database
+
+    database_path = tmp_path / "companies.sqlite3"
+    build_company_database(
+        _LINKS / "companies.csv",
+        _LINKS / "contacts.csv",
+        database_path,
+        shareholders_csv=_LINKS / "shareholders.csv",
+        investments_csv=_LINKS / "investments.csv",
+    )
+    return load_ownership_graph(CompanyRepository(database_path))
+
+
+def test_graph_search_node_reports_candidates_and_shared_controllers(tmp_path):
+    from deepresearch_agent.agents.nodes import graph_search_node
+
+    graph = _ownership_graph(tmp_path)
+    seeds = ["91110000000000111A", "91110000000000222B", "91110000000000333C"]
+    searcher = lambda query: assemble_subgraph_context(graph, seeds, query=query)
+
+    state = ResearchState(question="哪些企业能做注塑成型", domain="procurement")
+    updated = graph_search_node(state, searcher)
+
+    report = updated.graph_report
+    assert report is not None
+    assert report.recommendation == "insufficient_evidence"
+    candidate_names = {c.legal_name for c in report.candidates}
+    assert {"甲公司", "乙公司", "丙公司"} <= candidate_names
+    shared = {s.controller_name: s for s in report.shared_controllers}
+    assert "共同控股集团有限公司" in shared
+    assert shared["共同控股集团有限公司"].via_person is False
+    assert "张三" in shared
+    assert shared["张三"].via_person is True
+    assert "须人工复核" in shared["张三"].note
+
+
+def test_graph_search_node_unavailable_when_searcher_missing():
+    from deepresearch_agent.agents.nodes import graph_search_node
+
+    state = ResearchState(question="哪些企业能做注塑成型", domain="procurement")
+    updated = graph_search_node(state, None)
+
+    assert updated.graph_report is not None
+    assert updated.graph_report.recommendation == "insufficient_evidence"
+    assert updated.graph_report.candidates == []
+    assert "不可用" in updated.graph_report.summary

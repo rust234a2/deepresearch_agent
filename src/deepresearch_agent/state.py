@@ -63,6 +63,29 @@ class ScopeSearchReport(BaseModel):
     open_questions: list[str]
 
 
+class GraphSearchCandidate(BaseModel):
+    unified_social_credit_code: str
+    legal_name: str
+    top_score: float
+    ultimate_controllers: list[str]
+
+
+class SharedControllerFinding(BaseModel):
+    controller_name: str
+    controlled_companies: list[str]
+    via_person: bool
+    note: str
+
+
+class GraphSearchReport(BaseModel):
+    query: str
+    recommendation: Recommendation = "insufficient_evidence"
+    summary: str
+    candidates: list[GraphSearchCandidate]
+    shared_controllers: list[SharedControllerFinding]
+    open_questions: list[str]
+
+
 class ResearchState(BaseModel):
     question: str
     domain: str
@@ -76,4 +99,5 @@ class ResearchState(BaseModel):
     missing_dimensions: list[str] = Field(default_factory=list)
     report: SupplierReport | None = None
     scope_report: ScopeSearchReport | None = None
+    graph_report: GraphSearchReport | None = None
     trace: list[ToolTrace] = Field(default_factory=list)
