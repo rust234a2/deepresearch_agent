@@ -2,7 +2,7 @@ from pathlib import Path
 
 from deepresearch_agent.company_database import build_company_database
 from deepresearch_agent.company_repository import CompanyRepository
-from deepresearch_agent.graph_retrieval import assemble_subgraph_context
+from deepresearch_agent.graph_retrieval import assemble_subgraph_context, hybrid_search
 from deepresearch_agent.ownership_graph import load_ownership_graph
 
 
@@ -66,3 +66,30 @@ def test_assemble_skips_unknown_seed(tmp_path):
 
     assert ctx.seeds == []
     assert ctx.shared_controllers == []
+
+
+class _Hit:
+    def __init__(self, code: str, score: float):
+        self.unified_social_credit_code = code
+        self.score = score
+
+
+class _StubRetriever:
+    def __init__(self, hits):
+        self._hits = hits
+
+    def search(self, query, k):
+        return self._hits
+
+
+def test_hybrid_search_uses_scope_seeds_sorted_by_score(tmp_path):
+    graph = _graph(tmp_path)
+    retriever = _StubRetriever([_Hit(B_CODE, 0.7), _Hit(A_CODE, 0.95), _Hit(A_CODE, 0.4)])
+
+    ctx = hybrid_search("注塑成型", retriever, graph)
+
+    assert ctx.query == "注塑成型"
+    assert [s.code for s in ctx.seeds] == [A_CODE, B_CODE]
+    assert ctx.seeds[0].score == 0.95
+    shared_ids = {s.node_id for s in ctx.shared_controllers}
+    assert "ext:共同控股集团有限公司" in shared_ids

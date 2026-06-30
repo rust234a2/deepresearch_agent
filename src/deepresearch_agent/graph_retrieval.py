@@ -117,3 +117,21 @@ def assemble_subgraph_context(
     shared.sort(key=lambda s: (-len(s.controlled_seeds), s.node_id))
     seeds.sort(key=lambda s: (-s.score, s.code))
     return HybridContext(query=query, seeds=seeds, shared_controllers=shared)
+
+
+def hybrid_search(
+    query: str,
+    scope_retriever,
+    graph: OwnershipGraph,
+    k: int = 10,
+    max_depth: int = 5,
+) -> HybridContext:
+    hits = scope_retriever.search(query, k)
+    scores: dict[str, float] = {}
+    for hit in hits:
+        code = hit.unified_social_credit_code
+        scores[code] = max(scores.get(code, 0.0), hit.score)
+    seed_codes = sorted(scores, key=lambda code: (-scores[code], code))
+    return assemble_subgraph_context(
+        graph, seed_codes, max_depth=max_depth, query=query, scores=scores
+    )
