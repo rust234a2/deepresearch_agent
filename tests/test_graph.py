@@ -128,6 +128,63 @@ def test_run_research_enable_scope_without_index_returns_unavailable(company_dat
     assert state.report is None
 
 
+def _stub_graph_node(state):
+    from deepresearch_agent.state import GraphSearchReport
+
+    state.graph_report = GraphSearchReport(
+        query=state.question,
+        summary="stub-graph",
+        candidates=[],
+        shared_controllers=[],
+        open_questions=[],
+    )
+    return state
+
+
+def test_capability_routes_to_graph_when_node_injected(company_database_path):
+    from deepresearch_agent.agents.graph import build_graph, run_compiled
+    from deepresearch_agent.company_repository import CompanyRepository
+
+    domain_pack = load_domain_pack(Path("domains/procurement/domain.yaml"))
+    repository = CompanyRepository(company_database_path)
+    app = build_graph(domain_pack, repository, graph_node=_stub_graph_node)
+
+    state = run_compiled(app, "哪些企业能做注塑成型", "procurement")
+
+    assert state.graph_report is not None
+    assert state.graph_report.summary == "stub-graph"
+    assert state.report is None
+
+
+def test_named_company_still_verifies_with_graph_node(company_database_path):
+    from deepresearch_agent.agents.graph import build_graph, run_compiled
+    from deepresearch_agent.company_repository import CompanyRepository
+
+    domain_pack = load_domain_pack(Path("domains/procurement/domain.yaml"))
+    repository = CompanyRepository(company_database_path)
+    app = build_graph(domain_pack, repository, graph_node=_stub_graph_node)
+
+    state = run_compiled(app, "核验示例科技股份有限公司", "procurement")
+
+    assert state.report is not None
+    assert state.graph_report is None
+
+
+def test_run_research_enable_graph_without_index_degrades(company_database_path, tmp_path):
+    missing_index = tmp_path / "does_not_exist.faiss"
+
+    state = run_research(
+        "哪些企业能做注塑成型",
+        database_path=company_database_path,
+        index_path=missing_index,
+        enable_graph=True,
+    )
+
+    assert state.graph_report is not None
+    assert "不可用" in state.graph_report.summary
+    assert state.report is None
+
+
 @pytest.mark.slow
 def test_run_research_scope_search_end_to_end(company_database_path, tmp_path):
     from build_scope_index import build_scope_index
