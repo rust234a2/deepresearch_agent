@@ -32,7 +32,10 @@
 11. 旧能力、合规、财务、采购历史组合模型和两家英文演示供应商已删除。
 12. 一组质量修复：资本金额支持“亿”单位、API 启动时单次建图与仓库、企业识别去假歧义（子串被更具体名称支配则丢弃）、`get_contact` 只查联系方式表、工具失败时保留错误信息。
 13. **RAG 语义经营范围检索模块（`rag/`）**：经营范围条款感知切块 → bge-small-zh-v1.5 嵌入 → FAISS（`IndexIDMap(IndexFlatIP)`）→ `ScopeRetriever` → `search_company_scope` 工具 + 独立 CLI。schema 升到 version 2（新增 `business_scope_chunks`、`scope_index_metadata`）。依赖 `.[rag]` 可选 extra。
-14. **scope 检索端到端接入 Agent（方案 A）**：planner 的 `not_found` 在 `enable_scope=True` 时路由到 `scope_search_node`，输出 `ScopeSearchReport` 候选清单（企业 + 命中条款 + 评分，`recommendation` 固定 `insufficient_evidence`）。`enable_scope` 仅 CLI 启用，`/research` API 响应形状不变；核验指定企业流程不变；缺 `.[rag]`/索引时懒加载降级为“不可用”报告。
+14. **scope 检索端到端接入 Agent（方案 A）**：planner 的 `not_found` 在 `enable_scope=True` 时路由到 `scope_search_node`，输出 `ScopeSearchReport` 候选清单（企业 + 命中条款 + 评分，`recommendation` 固定 `insufficient_evidence`）。`enable_scope` 仅 CLI 启用，`/research` API 响应形状不变；核验指定企业流程不变；缺 `.[rag]`/索引时懒加载降级为“不可用”报告。**（注：第 15 条起 `scope_search_node` 已被 C2 撤销，检索并入 researcher。）**
+15. **GraphRAG 股权关系栈（A3–B7）**：股权清洗与 `graph_nodes` 表（schema 升到 version 4）→ 只读 `CompanyRepository` 股东/投资/图节点边读取 → 内存有向图 `OwnershipGraph` → 图遍历（ego / 最终控制人 / 共同控制人 / 最短路径，`fund` 类型不外扩）→ 混合检索 `hybrid_search`（scope 种子 + 子图装配 + 共享控制人）。关联方/共享控制人为**线索级**（`via_person` 低置信、标“须人工复核”），绝不作控制关系或围标认定。基金/机构噪声用 `FUND_NOISE_KEYWORDS` 过滤（已知缺口：中文名外资/国资机构漏过）。
+16. **C1 查询复杂度分类器**：`classify_complexity(query, repository, llm)` → simple/medium/complex。确定性启发式（关系关键词 + 具名信号）为兜底；可选 DeepSeek 分类器（OpenAI 兼容，`.[llm]` extra，`DEEPSEEK_API_KEY`）只精修。**全项目唯一 LLM 环节，只发查询文本、只做分类**，无 key/无依赖/异常自动回退启发式。
+17. **C2 查询编排（检索/生成分层）**：图收敛为纯线性 `planner → researcher → critic → writer`。planner 解析 + 分类（不检索）；**researcher = 检索层**，按 `解析状态 × 复杂度 × 是否启用` 分派 `named`(四工具) / `scope` / `graph`(缺 searcher 且 scope 可用则回退) / `unresolved`，只检索、落 state 中间态；**writer = 唯一生成层**，按 `retrieval_mode` 出 `SupplierReport`/`ScopeSearchReport`/`GraphSearchReport`，所有叙述与不可用提示在此。撤销 `scope_search_node`/`graph_search_node` 独立节点与 planner 条件路由。`--graph` 语义变为“允许图检索、由复杂度决定用不用”；`/research` API 形状不变。合并了原 C3（结构化生成即 writer 单独做），路线图剩 C4（降级/重试）。
 
 ## 本地数据状态
 

@@ -82,12 +82,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 数据库构建是**原子**的：写临时文件 → 校验/事务 → `replace` 旧文件。`SCHEMA_VERSION`（当前为 2，含 `business_scope_chunks` 与 `scope_index_metadata` 表）写入 `PRAGMA user_version`；Repository 用只读连接打开，版本不匹配直接报错要求重建。改 schema 必须同步 `SCHEMA_VERSION` 和 `_create_schema`。
 
 ### LangGraph 编排（`agents/graph.py` + `agents/nodes.py`）
-`StateGraph(ResearchState)`，节点 `planner → researcher → critic → writer`，两处条件路由：
+`StateGraph(ResearchState)`，**纯线性** `planner → researcher → critic → writer → END`（C2 起，检索/生成分层）。仅 critic 后一处条件回环。
 
-- planner 后：`resolve_supplier` 解析企业。`resolved` 进 researcher；`not_found` 且启用 scope（`run_research(enable_scope=True)`，CLI 默认开）进 `scope_search` 走经营范围语义检索；其余（`ambiguous`，或未启用 scope 的 `not_found`）进 writer。
-- critic 后：`missing_dimensions` 非空且 `iteration < max_iterations(3)` 则回 researcher，否则进 writer。
+- **planner**：`resolve_supplier` 解析企业 + `classify_complexity` 写 `state.complexity`（LLM 只发查询文本，无 key/无 `.[llm]` 走确定性启发式），不检索。
+- **researcher = 检索层**：按 `解析状态 × 复杂度 × 是否启用检索` 分派并只做检索：`resolved`→`named`（调白名单私有工具）；`not_found`+`simple`→`scope`（经营范围语义检索，填 `scope_candidates`）；`not_found`+`medium/complex`→`graph`（GraphRAG 融合，填 `graph_candidates`/`shared_controllers`，缺 searcher 且 scope 可用则回退 scope）；`ambiguous` 或均未启用→`unresolved`（不检索）。检索器缺失/异常置 `retrieval_available=False`，不抛出、不写报告叙述。
+- **critic 后**：`missing_dimensions` 非空且 `iteration < max_iterations(3)` 则回 researcher，否则进 writer（实际只有 `named` 会累积维度、可能回环）。
+- **writer = 唯一生成层**：按 `retrieval_mode` 出 `SupplierReport`(named/unresolved) / `ScopeSearchReport`(scope) / `GraphSearchReport`(graph)，所有 summary/open_questions/`insufficient_evidence`/人工复核提示与“不可用”报告都在此生成。
 
-researcher 只调用 Domain Pack 白名单内的私有数据工具（`get_company_profile`、`get_company_contact`），把工商/联系方式字段拆成六个研究维度的 `Evidence`（每条带 `local://` Citation）。critic 用“计划维度 − 已覆盖维度”算缺口。所有状态都在 `state.py` 的 Pydantic 模型里流转。
+researcher 的 `named` 路径调 Domain Pack 白名单内的私有数据工具（`get_company_profile`、`get_company_contact`、`get_ownership_neighborhood`、`get_related_parties`），把工商/联系方式/股权/关联方拆成研究维度的 `Evidence`（每条带 `local://` Citation）。critic 用“计划维度 − 已覆盖维度”算缺口。检索器与 LLM 由 `build_graph(..., scope_retriever, graph_searcher, llm, scope_enabled, graph_enabled)` 注入；`run_research(enable_scope, enable_graph)` 决定构建/注入哪个。旧的 `scope_search_node`/`graph_search_node` 独立节点与 planner 条件路由已撤销。所有状态都在 `state.py` 的 Pydantic 模型里流转。
 
 ### Domain Pack（`domain.py` + `domains/<domain>/domain.yaml`）
 领域配置驱动 Agent 行为：`research_dimensions`、`allowed_tools`（工具白名单，researcher 严格据此调用）、`report_sections`、`source_priority`、`hitl_policy`。新增领域 = 新增一个 `domains/<name>/domain.yaml`，不改编排代码。
@@ -104,6 +106,7 @@ researcher 只调用 Domain Pack 白名单内的私有数据工具（`get_compan
 
 ## 注意点
 
-- `rag/` 是语义经营范围检索子系统（切块 → bge-small-zh-v1.5 嵌入 → FAISS → `ScopeRetriever` → `search_company_scope` 工具 + CLI）。依赖 `.[rag]` 可选 extra；FAISS 索引由 `scripts/build_scope_index.py` 从 SQLite 重建。已接入主图：planner 的 `not_found` 在 `enable_scope=True` 时路由到 `scope_search_node`，输出 `ScopeSearchReport` 候选清单（`run_research` 内懒加载 rag，缺 `.[rag]`/索引则降级为“不可用”报告）。`enable_scope` 仅 CLI 启用，`/research` API 形状不变；端到端“先筛选再逐个核验”是后续工作。旧的 `retrieval/local.py` 关键词检索器已删除。
+- `rag/` 是语义经营范围检索子系统（切块 → bge-small-zh-v1.5 嵌入 → FAISS → `ScopeRetriever` → `search_company_scope` 工具 + CLI）。依赖 `.[rag]` 可选 extra；FAISS 索引由 `scripts/build_scope_index.py` 从 SQLite 重建。C2 起，retriever 不再是独立节点，而是由 `run_research(enable_scope=True)` 懒加载后**注入 researcher**；缺 `.[rag]`/索引则 `retrieval_available=False`，由 writer 降级为“不可用”报告。`/research` API 不启用检索、形状不变。旧的 `retrieval/local.py` 关键词检索器已删除。
+- GraphRAG 股权栈（`ownership_graph.py` / `graph_traversal.py` / `graph_retrieval.py`）：内存有向图 + ego/最终控制人/共同控制人/最短路径 + `hybrid_search` 融合。经 `run_research(enable_graph=True)`（CLI `--graph`）注入 researcher 的 `graph` 模式。查询复杂度分类见 `query_complexity.py`（C1，唯一 LLM 环节，只发查询文本）。关联方/共享控制人为**线索级**（`via_person` 低置信、标“须人工复核”），绝不作控制关系或围标认定。
 - `docs/architecture.md` 是架构事实标准；`docs/superpowers/` 下是历史 spec 和 plan。
 - 真实最新构建结果：3506 家企业、3506 条联系方式（参考量级，以 `import_metadata` 表为准）。
