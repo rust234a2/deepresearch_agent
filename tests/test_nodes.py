@@ -446,3 +446,75 @@ def test_researcher_ambiguous_is_unresolved_and_does_not_retrieve(company_databa
     assert updated.evidence == []
     assert updated.scope_candidates == []
     assert updated.graph_candidates == []
+
+
+def test_writer_scope_report_from_candidates(company_database_path):
+    from deepresearch_agent.state import Citation, Evidence, ScopeCandidate
+
+    state = ResearchState(question="工业设备制造", domain="procurement")
+    state.retrieval_mode = "scope"
+    state.scope_candidates = [
+        ScopeCandidate(
+            unified_social_credit_code="X",
+            legal_name="示例科技股份有限公司",
+            matched_clauses=[
+                Evidence(
+                    claim="工业设备制造",
+                    dimension="business_scope_match",
+                    confidence=0.9,
+                    citation=Citation(
+                        source_id="company:X", title="t", url="local://companies/X", snippet="工业设备制造"
+                    ),
+                )
+            ],
+            top_score=0.9,
+        )
+    ]
+    updated = writer_node(state, DOMAIN_PACK)
+    assert updated.scope_report is not None
+    assert updated.scope_report.recommendation == "insufficient_evidence"
+    assert "候选" in updated.scope_report.summary
+    assert updated.report is None
+
+
+def test_writer_scope_report_unavailable(company_database_path):
+    state = ResearchState(question="哪些企业能做注塑成型", domain="procurement")
+    state.retrieval_mode = "scope"
+    state.retrieval_available = False
+    updated = writer_node(state, DOMAIN_PACK)
+    assert "不可用" in updated.scope_report.summary
+    assert updated.scope_report.candidates == []
+
+
+def test_writer_graph_report_from_findings(company_database_path):
+    from deepresearch_agent.state import GraphSearchCandidate, SharedControllerFinding
+
+    state = ResearchState(question="哪些做注塑的供应商互相关联", domain="procurement")
+    state.retrieval_mode = "graph"
+    state.graph_candidates = [
+        GraphSearchCandidate(
+            unified_social_credit_code="A", legal_name="甲公司", top_score=0.9,
+            ultimate_controllers=["共同控股集团有限公司"],
+        )
+    ]
+    state.shared_controllers = [
+        SharedControllerFinding(
+            controller_name="张三", controlled_companies=["甲公司", "乙公司"],
+            via_person=True, note="经同名自然人推断，须人工复核",
+        )
+    ]
+    updated = writer_node(state, DOMAIN_PACK)
+    assert updated.graph_report is not None
+    assert updated.graph_report.recommendation == "insufficient_evidence"
+    assert "共享控制人" in updated.graph_report.summary
+    assert any("围标" in q or "须人工复核" in q for q in updated.graph_report.open_questions)
+    assert updated.report is None
+
+
+def test_writer_graph_report_unavailable(company_database_path):
+    state = ResearchState(question="哪些做注塑的供应商互相关联", domain="procurement")
+    state.retrieval_mode = "graph"
+    state.retrieval_available = False
+    updated = writer_node(state, DOMAIN_PACK)
+    assert "不可用" in updated.graph_report.summary
+    assert updated.graph_report.candidates == []

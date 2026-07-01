@@ -213,6 +213,10 @@ def critique_node(state: ResearchState) -> ResearchState:
 
 
 def writer_node(state: ResearchState, domain_pack: DomainPack) -> ResearchState:
+    if state.retrieval_mode == "scope":
+        return _write_scope_report(state)
+    if state.retrieval_mode == "graph":
+        return _write_graph_report(state)
     if state.supplier_name is None:
         return _write_unresolved_supplier_report(state)
 
@@ -242,6 +246,67 @@ def writer_node(state: ResearchState, domain_pack: DomainPack) -> ResearchState:
         ],
         evidence_table=state.evidence,
         open_questions=open_questions,
+    )
+    return state
+
+
+def _write_scope_report(state: ResearchState) -> ResearchState:
+    if not state.retrieval_available:
+        state.scope_report = ScopeSearchReport(
+            query=state.question,
+            summary="经营范围语义检索不可用：请安装 .[rag] 可选依赖并运行 "
+            "scripts/build_scope_index.py 构建索引。",
+            candidates=[],
+            open_questions=["安装 .[rag] 可选依赖并构建 FAISS 经营范围索引。"],
+        )
+        return state
+    candidates = state.scope_candidates
+    if candidates:
+        summary = (
+            f"按经营范围语义检索到 {len(candidates)} 家候选企业；"
+            "现有数据仅工商经营范围，不足以作出采购批准或风险结论。"
+        )
+    else:
+        summary = "未检索到经营范围匹配的企业。"
+    state.scope_report = ScopeSearchReport(
+        query=state.question,
+        summary=summary,
+        candidates=candidates,
+        open_questions=list(_SCOPE_OPEN_QUESTIONS),
+    )
+    return state
+
+
+def _write_graph_report(state: ResearchState) -> ResearchState:
+    if not state.retrieval_available:
+        state.graph_report = GraphSearchReport(
+            query=state.question,
+            summary="图谱关系检索不可用：请安装 .[rag] 可选依赖并构建 FAISS 经营范围索引与公司图谱。",
+            candidates=[],
+            shared_controllers=[],
+            open_questions=["安装 .[rag] 可选依赖并构建 FAISS 索引。"],
+        )
+        return state
+    candidates = state.graph_candidates
+    shared = state.shared_controllers
+    if candidates:
+        if shared:
+            middle = f"其中 {len(shared)} 组疑似共享控制人（围标/集中度线索，须人工复核）；"
+        else:
+            middle = "未发现候选间共享控制人；"
+        summary = (
+            f"按经营范围语义检索到 {len(candidates)} 家候选；"
+            + middle
+            + "现有数据不足以作出采购批准或风险结论。"
+        )
+    else:
+        summary = "未检索到经营范围匹配的企业。"
+    state.graph_report = GraphSearchReport(
+        query=state.question,
+        summary=summary,
+        candidates=candidates,
+        shared_controllers=shared,
+        open_questions=list(_GRAPH_OPEN_QUESTIONS),
     )
     return state
 
