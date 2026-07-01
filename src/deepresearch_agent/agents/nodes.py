@@ -323,45 +323,6 @@ _SCOPE_OPEN_QUESTIONS = [
 ]
 
 
-def scope_search_node(state: ResearchState, retriever) -> ResearchState:
-    if retriever is None:
-        state.scope_report = ScopeSearchReport(
-            query=state.question,
-            summary="经营范围语义检索不可用：请安装 .[rag] 可选依赖并运行 "
-            "scripts/build_scope_index.py 构建索引。",
-            candidates=[],
-            open_questions=["安装 .[rag] 可选依赖并构建 FAISS 经营范围索引。"],
-        )
-        return state
-
-    try:
-        hits = retriever.search(state.question, SCOPE_SEARCH_K)
-    except Exception as exc:  # 检索期异常兜底为不可用报告
-        state.scope_report = ScopeSearchReport(
-            query=state.question,
-            summary=f"经营范围语义检索失败：{exc}",
-            candidates=[],
-            open_questions=["检查 .[rag] 依赖与 FAISS 索引后重试。"],
-        )
-        return state
-
-    candidates = _group_scope_hits(hits)
-    if candidates:
-        summary = (
-            f"按经营范围语义检索到 {len(candidates)} 家候选企业；"
-            "现有数据仅工商经营范围，不足以作出采购批准或风险结论。"
-        )
-    else:
-        summary = "未检索到经营范围匹配的企业。"
-    state.scope_report = ScopeSearchReport(
-        query=state.question,
-        summary=summary,
-        candidates=candidates,
-        open_questions=list(_SCOPE_OPEN_QUESTIONS),
-    )
-    return state
-
-
 def _group_scope_hits(hits) -> list[ScopeCandidate]:
     grouped: dict[str, ScopeCandidate] = {}
     for hit in hits:
@@ -399,75 +360,6 @@ _GRAPH_OPEN_QUESTIONS = [
     "接入产能、交期与质量认证数据。",
     "接入内部采购履约数据。",
 ]
-
-
-def graph_search_node(state: ResearchState, searcher) -> ResearchState:
-    if searcher is None:
-        state.graph_report = GraphSearchReport(
-            query=state.question,
-            summary="图谱关系检索不可用：请安装 .[rag] 可选依赖并构建 FAISS 经营范围索引与公司图谱。",
-            candidates=[],
-            shared_controllers=[],
-            open_questions=["安装 .[rag] 可选依赖并构建 FAISS 索引。"],
-        )
-        return state
-
-    try:
-        context = searcher(state.question)
-    except Exception as exc:  # 检索期异常兜底为不可用报告
-        state.graph_report = GraphSearchReport(
-            query=state.question,
-            summary=f"图谱关系检索失败：{exc}",
-            candidates=[],
-            shared_controllers=[],
-            open_questions=["检查 .[rag] 依赖、FAISS 索引与公司图谱后重试。"],
-        )
-        return state
-
-    name_by_code = {seed.code: seed.name for seed in context.seeds}
-    candidates = [
-        GraphSearchCandidate(
-            unified_social_credit_code=seed.code,
-            legal_name=seed.name,
-            top_score=seed.score,
-            ultimate_controllers=[
-                f"{controller.display_name}（疑·须人工复核）"
-                if controller.via_person
-                else controller.display_name
-                for controller in seed.controllers
-            ],
-        )
-        for seed in context.seeds
-    ]
-    shared = [
-        SharedControllerFinding(
-            controller_name=item.name,
-            controlled_companies=[name_by_code.get(code, code) for code in item.controlled_seeds],
-            via_person=item.via_person,
-            note="经同名自然人推断，须人工复核" if item.via_person else "经企业股权链推断",
-        )
-        for item in context.shared_controllers
-    ]
-    if candidates:
-        if shared:
-            middle = f"其中 {len(shared)} 组疑似共享控制人（围标/集中度线索，须人工复核）；"
-        else:
-            middle = "未发现候选间共享控制人；"
-        summary = (
-            f"按经营范围语义检索到 {len(candidates)} 家候选；"
-            + middle
-            + "现有数据不足以作出采购批准或风险结论。"
-        )
-    else:
-        summary = "未检索到经营范围匹配的企业。"
-    state.graph_report = GraphSearchReport(
-        query=state.question,
-        summary=summary,
-        candidates=candidates,
-        shared_controllers=shared,
-        open_questions=list(_GRAPH_OPEN_QUESTIONS),
-    )
-    return state
 
 
 def _append_profile_evidence(state: ResearchState, data: dict) -> None:
