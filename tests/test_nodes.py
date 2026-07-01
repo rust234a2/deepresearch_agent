@@ -347,3 +347,102 @@ def test_planner_complexity_falls_back_to_heuristic(company_database_path):
     assert updated.complexity is not None
     assert updated.complexity.method == "heuristic"
     assert updated.complexity.level == "medium"
+
+
+class _ScopeHit:
+    def __init__(self, code, name, text, score):
+        self.unified_social_credit_code = code
+        self.legal_name = name
+        self.section_label = None
+        self.text = text
+        self.score = score
+
+
+class _ScopeRetriever:
+    def search(self, query, k):
+        return [
+            _ScopeHit("X", "示例科技股份有限公司", "工业设备制造", 0.95),
+            _ScopeHit("X", "示例科技股份有限公司", "工业设备销售", 0.80),
+        ]
+
+
+def test_researcher_scope_mode_groups_candidates(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="工业设备制造", domain="procurement"), DOMAIN_PACK, repository
+    )
+    updated = researcher_node(
+        state, ToolRegistry(), DOMAIN_PACK,
+        scope_retriever=_ScopeRetriever(), scope_enabled=True,
+    )
+    assert updated.retrieval_mode == "scope"
+    assert len(updated.scope_candidates) == 1
+    assert updated.scope_candidates[0].unified_social_credit_code == "X"
+    assert updated.scope_candidates[0].top_score == 0.95
+    assert updated.retrieval_available is True
+
+
+def test_researcher_scope_mode_unavailable_when_retriever_missing(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="哪些企业能做注塑成型", domain="procurement"), DOMAIN_PACK, repository
+    )
+    updated = researcher_node(
+        state, ToolRegistry(), DOMAIN_PACK, scope_retriever=None, scope_enabled=True
+    )
+    assert updated.retrieval_mode == "scope"
+    assert updated.retrieval_available is False
+    assert updated.scope_candidates == []
+
+
+def test_researcher_graph_mode_builds_candidates_and_shared(tmp_path, company_database_path):
+    graph = _ownership_graph(tmp_path)
+    seeds = ["91110000000000111A", "91110000000000222B", "91110000000000333C"]
+    searcher = lambda query: assemble_subgraph_context(graph, seeds, query=query)
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="哪些做注塑的供应商互相关联", domain="procurement"),
+        DOMAIN_PACK, repository,
+    )
+    updated = researcher_node(
+        state, ToolRegistry(), DOMAIN_PACK, graph_searcher=searcher, graph_enabled=True
+    )
+    assert updated.retrieval_mode == "graph"
+    names = {c.legal_name for c in updated.graph_candidates}
+    assert {"甲公司", "乙公司", "丙公司"} <= names
+    shared = {s.controller_name: s for s in updated.shared_controllers}
+    assert shared["共同控股集团有限公司"].via_person is False
+    assert shared["张三"].via_person is True
+    assert "须人工复核" in shared["张三"].note
+
+
+def test_researcher_graph_mode_falls_back_to_scope_when_searcher_absent(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="哪些做注塑的供应商互相关联", domain="procurement"),
+        DOMAIN_PACK, repository,
+    )
+    updated = researcher_node(
+        state, ToolRegistry(), DOMAIN_PACK,
+        scope_retriever=_ScopeRetriever(), scope_enabled=True,
+        graph_searcher=None, graph_enabled=True,
+    )
+    assert updated.retrieval_mode == "scope"
+    assert len(updated.scope_candidates) == 1
+
+
+def test_researcher_ambiguous_is_unresolved_and_does_not_retrieve(company_database_path):
+    from deepresearch_agent.company_models import CompanyResolution
+
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="核验示例", domain="procurement"), DOMAIN_PACK, repository
+    )
+    if state.supplier_resolution.status != "ambiguous":
+        state.supplier_resolution = CompanyResolution(status="ambiguous", candidates=[])
+        state.supplier_name = None
+    updated = researcher_node(state, ToolRegistry(), DOMAIN_PACK)
+    assert updated.retrieval_mode == "unresolved"
+    assert updated.evidence == []
+    assert updated.scope_candidates == []
+    assert updated.graph_candidates == []

@@ -72,52 +72,137 @@ def researcher_node(
     state: ResearchState,
     tools: ToolRegistry,
     domain_pack: DomainPack,
+    scope_retriever=None,
+    graph_searcher=None,
+    scope_enabled: bool = False,
+    graph_enabled: bool = False,
 ) -> ResearchState:
+    mode = _decide_retrieval_mode(
+        state, scope_retriever, graph_searcher, scope_enabled, graph_enabled
+    )
+    state.retrieval_mode = mode
+    if mode == "named":
+        _research_named(state, tools, domain_pack)
+    elif mode == "scope":
+        _retrieve_scope(state, scope_retriever)
+    elif mode == "graph":
+        _retrieve_graph(state, graph_searcher)
+    return state
+
+
+def _decide_retrieval_mode(
+    state: ResearchState,
+    scope_retriever,
+    graph_searcher,
+    scope_enabled: bool,
+    graph_enabled: bool,
+) -> str:
+    resolution = state.supplier_resolution
+    status = resolution.status if resolution is not None else "not_found"
+    if status == "resolved":
+        return "named"
+    if status == "ambiguous":
+        return "unresolved"
+    level = state.complexity.level if state.complexity is not None else "simple"
+    want_graph = graph_enabled and level in {"medium", "complex"}
+    if want_graph and graph_searcher is not None:
+        return "graph"
+    if want_graph and scope_retriever is not None:
+        return "scope"  # 想用图但 searcher 缺失且 scope 可用 → 退到 scope
+    if scope_enabled:
+        return "scope"
+    if want_graph:
+        return "graph"  # 图已启用但检索器均未加载 → 交给 writer 出"不可用"图报告
+    return "unresolved"
+
+
+def _research_named(state: ResearchState, tools: ToolRegistry, domain_pack: DomainPack) -> None:
     if state.supplier_name is None or state.company_credit_code is None:
         raise ValueError("planner_node must resolve a company before researcher_node")
 
     if "get_company_profile" in domain_pack.allowed_tools:
         result = _run_tool(
-            state,
-            tools,
-            "get_company_profile",
-            {"credit_code": state.company_credit_code},
+            state, tools, "get_company_profile", {"credit_code": state.company_credit_code}
         )
         if result is not None and result.status == "ok":
             _append_profile_evidence(state, result.data)
 
     if "get_company_contact" in domain_pack.allowed_tools:
         result = _run_tool(
-            state,
-            tools,
-            "get_company_contact",
-            {"credit_code": state.company_credit_code},
+            state, tools, "get_company_contact", {"credit_code": state.company_credit_code}
         )
         if result is not None and result.status == "ok":
             _append_contact_evidence(state, result.data)
 
     if "get_ownership_neighborhood" in domain_pack.allowed_tools:
         result = _run_tool(
-            state,
-            tools,
-            "get_ownership_neighborhood",
-            {"credit_code": state.company_credit_code},
+            state, tools, "get_ownership_neighborhood", {"credit_code": state.company_credit_code}
         )
         if result is not None and result.status == "ok":
             _append_ownership_evidence(state, result.data)
 
     if "get_related_parties" in domain_pack.allowed_tools:
         result = _run_tool(
-            state,
-            tools,
-            "get_related_parties",
-            {"credit_code": state.company_credit_code},
+            state, tools, "get_related_parties", {"credit_code": state.company_credit_code}
         )
         if result is not None and result.status == "ok":
             _append_related_parties_evidence(state, result.data)
 
     state.iteration += 1
-    return state
+
+
+def _retrieve_scope(state: ResearchState, retriever) -> None:
+    if retriever is None:
+        state.retrieval_available = False
+        return
+    try:
+        hits = retriever.search(state.question, SCOPE_SEARCH_K)
+    except Exception:
+        state.retrieval_available = False
+        return
+    state.scope_candidates = _group_scope_hits(hits)
+
+
+def _retrieve_graph(state: ResearchState, searcher) -> None:
+    if searcher is None:
+        state.retrieval_available = False
+        return
+    try:
+        context = searcher(state.question)
+    except Exception:
+        state.retrieval_available = False
+        return
+    candidates, shared = _build_graph_findings(context)
+    state.graph_candidates = candidates
+    state.shared_controllers = shared
+
+
+def _build_graph_findings(context):
+    name_by_code = {seed.code: seed.name for seed in context.seeds}
+    candidates = [
+        GraphSearchCandidate(
+            unified_social_credit_code=seed.code,
+            legal_name=seed.name,
+            top_score=seed.score,
+            ultimate_controllers=[
+                f"{controller.display_name}（疑·须人工复核）"
+                if controller.via_person
+                else controller.display_name
+                for controller in seed.controllers
+            ],
+        )
+        for seed in context.seeds
+    ]
+    shared = [
+        SharedControllerFinding(
+            controller_name=item.name,
+            controlled_companies=[name_by_code.get(code, code) for code in item.controlled_seeds],
+            via_person=item.via_person,
+            note="经同名自然人推断，须人工复核" if item.via_person else "经企业股权链推断",
+        )
+        for item in context.shared_controllers
+    ]
+    return candidates, shared
 
 
 def critique_node(state: ResearchState) -> ResearchState:
