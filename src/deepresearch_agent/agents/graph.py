@@ -6,10 +6,8 @@ from langgraph.graph import END, StateGraph
 
 from deepresearch_agent.agents.nodes import (
     critique_node,
-    graph_search_node,
     planner_node,
     researcher_node,
-    scope_search_node,
     writer_node,
 )
 from deepresearch_agent.company_repository import CompanyRepository
@@ -28,44 +26,28 @@ def _should_continue(state: ResearchState) -> str:
     return "writer"
 
 
-def build_graph(domain_pack: DomainPack, repository: CompanyRepository, scope_node=None, graph_node=None):
+def build_graph(
+    domain_pack: DomainPack,
+    repository: CompanyRepository,
+    scope_retriever=None,
+    graph_searcher=None,
+    llm=None,
+    scope_enabled: bool = False,
+    graph_enabled: bool = False,
+):
     tools = build_procurement_tool_registry(repository)
     graph = StateGraph(ResearchState)
-    graph.add_node(
-        "planner",
-        lambda state: planner_node(state, domain_pack, repository),
-    )
+    graph.add_node("planner", lambda state: planner_node(state, domain_pack, repository, llm))
     graph.add_node(
         "researcher",
-        lambda state: researcher_node(state, tools, domain_pack),
+        lambda state: researcher_node(
+            state, tools, domain_pack, scope_retriever, graph_searcher, scope_enabled, graph_enabled
+        ),
     )
     graph.add_node("critic", critique_node)
     graph.add_node("writer", lambda state: writer_node(state, domain_pack))
     graph.set_entry_point("planner")
-
-    planner_routes = {"researcher": "researcher", "writer": "writer"}
-    if scope_node is not None:
-        graph.add_node("scope_search", scope_node)
-        graph.add_edge("scope_search", END)
-        planner_routes["scope_search"] = "scope_search"
-    if graph_node is not None:
-        graph.add_node("graph_search", graph_node)
-        graph.add_edge("graph_search", END)
-        planner_routes["graph_search"] = "graph_search"
-
-    def route_after_planner(state: ResearchState) -> str:
-        resolution = state.supplier_resolution
-        status = resolution.status if resolution is not None else "not_found"
-        if status == "resolved":
-            return "researcher"
-        if status == "not_found":
-            if graph_node is not None:
-                return "graph_search"
-            if scope_node is not None:
-                return "scope_search"
-        return "writer"
-
-    graph.add_conditional_edges("planner", route_after_planner, planner_routes)
+    graph.add_edge("planner", "researcher")
     graph.add_edge("researcher", "critic")
     graph.add_conditional_edges(
         "critic",
@@ -93,41 +75,55 @@ def run_research(
 ) -> ResearchState:
     domain_pack = load_domain_pack(Path("domains") / domain / "domain.yaml")
     repository = CompanyRepository(database_path)
-    scope_node = (
-        _build_scope_node(database_path, index_path)
-        if enable_scope and not enable_graph
+    scope_retriever = (
+        _build_scope_retriever(database_path, index_path)
+        if (enable_scope or enable_graph)
         else None
     )
-    graph_node = _build_graph_node(database_path, index_path) if enable_graph else None
-    app = build_graph(domain_pack, repository, scope_node=scope_node, graph_node=graph_node)
+    graph_searcher = (
+        _build_graph_searcher(database_path, scope_retriever) if enable_graph else None
+    )
+    app = build_graph(
+        domain_pack,
+        repository,
+        scope_retriever=scope_retriever,
+        graph_searcher=graph_searcher,
+        llm=_build_llm(),
+        scope_enabled=enable_scope,
+        graph_enabled=enable_graph,
+    )
     return run_compiled(app, question, domain)
 
 
-def _build_scope_node(database_path: str | Path, index_path: str | Path):
-    retriever = None
+def _build_scope_retriever(database_path: str | Path, index_path: str | Path):
     try:
         from deepresearch_agent.rag.embedding import BgeEmbedder
         from deepresearch_agent.rag.retriever import load_scope_retriever
 
         if Path(index_path).exists():
-            retriever = load_scope_retriever(database_path, index_path, BgeEmbedder())
+            return load_scope_retriever(database_path, index_path, BgeEmbedder())
     except Exception:
-        retriever = None
-    return lambda state: scope_search_node(state, retriever)
+        return None
+    return None
 
 
-def _build_graph_node(database_path: str | Path, index_path: str | Path):
-    searcher = None
+def _build_graph_searcher(database_path: str | Path, scope_retriever):
+    if scope_retriever is None:
+        return None
     try:
         from deepresearch_agent.graph_retrieval import hybrid_search
         from deepresearch_agent.ownership_graph import load_ownership_graph
-        from deepresearch_agent.rag.embedding import BgeEmbedder
-        from deepresearch_agent.rag.retriever import load_scope_retriever
 
-        if Path(index_path).exists():
-            retriever = load_scope_retriever(database_path, index_path, BgeEmbedder())
-            graph = load_ownership_graph(CompanyRepository(database_path))
-            searcher = lambda query: hybrid_search(query, retriever, graph)
+        graph = load_ownership_graph(CompanyRepository(database_path))
+        return lambda query: hybrid_search(query, scope_retriever, graph)
     except Exception:
-        searcher = None
-    return lambda state: graph_search_node(state, searcher)
+        return None
+
+
+def _build_llm():
+    try:
+        from deepresearch_agent.llm.deepseek import build_deepseek_classifier
+
+        return build_deepseek_classifier()
+    except Exception:
+        return None
