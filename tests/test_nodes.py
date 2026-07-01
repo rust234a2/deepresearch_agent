@@ -329,3 +329,21 @@ def test_research_state_has_c2_retrieval_fields():
     assert state.scope_candidates == []
     assert state.graph_candidates == []
     assert state.shared_controllers == []
+
+
+def test_planner_sets_complexity_from_llm(company_database_path):
+    state = ResearchState(question="随便问问", domain="procurement")
+    updated = planner_node(
+        state, DOMAIN_PACK, _repository(company_database_path), llm=lambda q: "complex"
+    )
+    assert updated.complexity is not None
+    assert updated.complexity.level == "complex"
+    assert updated.complexity.method == "llm"
+
+
+def test_planner_complexity_falls_back_to_heuristic(company_database_path):
+    state = ResearchState(question="哪些做注塑的供应商互相关联", domain="procurement")
+    updated = planner_node(state, DOMAIN_PACK, _repository(company_database_path))
+    assert updated.complexity is not None
+    assert updated.complexity.method == "heuristic"
+    assert updated.complexity.level == "medium"

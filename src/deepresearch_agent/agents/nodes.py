@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.domain import DomainPack
+from deepresearch_agent.query_complexity import classify_complexity
 from deepresearch_agent.state import (
     Citation,
     Evidence,
@@ -43,11 +44,13 @@ def planner_node(
     state: ResearchState,
     domain_pack: DomainPack,
     repository: CompanyRepository,
+    llm=None,
 ) -> ResearchState:
     resolution = resolve_supplier(state.question, repository)
     state.supplier_resolution = resolution
     state.supplier_name = resolution.legal_name
     state.company_credit_code = resolution.unified_social_credit_code
+    state.complexity = classify_complexity(state.question, repository, llm)
     if resolution.status != "resolved" or resolution.legal_name is None:
         state.plan = []
         return state
