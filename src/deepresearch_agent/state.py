@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, HttpUrl
 
 from deepresearch_agent.company_models import CompanyResolution
+from deepresearch_agent.query_complexity import ComplexityResult
 
 
 Recommendation = Literal["approve", "conditional", "reject", "insufficient_evidence"]
@@ -101,3 +102,9 @@ class ResearchState(BaseModel):
     scope_report: ScopeSearchReport | None = None
     graph_report: GraphSearchReport | None = None
     trace: list[ToolTrace] = Field(default_factory=list)
+    complexity: ComplexityResult | None = None
+    retrieval_mode: Literal["named", "scope", "graph", "unresolved"] | None = None
+    retrieval_available: bool = True
+    scope_candidates: list[ScopeCandidate] = Field(default_factory=list)
+    graph_candidates: list[GraphSearchCandidate] = Field(default_factory=list)
+    shared_controllers: list[SharedControllerFinding] = Field(default_factory=list)

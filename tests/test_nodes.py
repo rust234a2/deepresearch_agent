@@ -319,3 +319,13 @@ def test_graph_search_node_unavailable_when_searcher_missing():
     assert updated.graph_report.recommendation == "insufficient_evidence"
     assert updated.graph_report.candidates == []
     assert "不可用" in updated.graph_report.summary
+
+
+def test_research_state_has_c2_retrieval_fields():
+    state = ResearchState(question="q", domain="procurement")
+    assert state.complexity is None
+    assert state.retrieval_mode is None
+    assert state.retrieval_available is True
+    assert state.scope_candidates == []
+    assert state.graph_candidates == []
+    assert state.shared_controllers == []
