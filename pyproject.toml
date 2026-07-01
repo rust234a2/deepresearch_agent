@@ -24,6 +24,9 @@ rag = [
   "sentence-transformers>=2.7.0",
   "numpy>=1.26.0",
 ]
+llm = [
+  "openai>=1.0",
+]
 
 [project.scripts]
 deepresearch = "deepresearch_agent.cli:main"
