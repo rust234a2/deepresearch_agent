@@ -40,6 +40,9 @@
 
 19. **N1 股权图后端接口抽象**（引入 Neo4j 替换内存图的第一步，纯重构、零行为变化）：新增 `ownership_backend.py` 的 `OwnershipGraphBackend` 协议（`has_node`/`display_name`/`ultimate_controllers`/`direct_neighbors`）+ `InMemoryOwnershipBackend`；`NeighborEdge` 从 `graph_retrieval` 迁入;`hybrid_search`/`assemble_subgraph_context` 改吃 backend；`graph.py` 灌图后包 backend。`ego`/`common_controllers`/`shortest_path` 不在协议（非 Agent 热路径，保留）。**N2 待做**：`.[neo4j]` 可选 extra + 本地 Docker + SQLite→Neo4j 灌图 + Cypher 版 `Neo4jBackend` + 双实现对拍（CI 跑内存实现、真 Neo4j 测试标 slow 本地跑）；Neo4j 必须本地自建（数据本地化红线，不用云 Aura）。
 
+20. **N2 Neo4j 股权图后端**（Neo4j 替换内存图成为生产图引擎）：新增 `neo4j_backend.py` 的 `Neo4jBackend`——用 Cypher 把 `ultimate_controllers`（变长路径 + `none(...fund)` 路径谓词 + `is_person OR 无非 fund 父` 终点判定）与邻居下推到服务端；`from_env()` 读 `NEO4J_*` 建 driver。灌图脚本 `scripts/build_ownership_neo4j.py`（SQLite→Neo4j 幂等 MERGE）。`_build_graph_searcher` 改建 `Neo4jBackend.from_env()`，连不上→None→C4 决策期回退 scope；`InMemoryOwnershipBackend` 退居测试替身 + 对拍基准。`.[neo4j]` extra、本地 `docker-compose.yml`（仅本地，不用云 Aura）、`@pytest.mark.neo4j` 对拍测试（默认排除，连不上跳过；本会话已真起 Neo4j 跑绿，Cypher 与内存实现逐条相等）。**via_person 语义**：Cypher 取"任一有效路径经自然人"（内存取 BFS 首达），fixture 上逐条相等。可视化白送：Neo4j Browser（7474）。
+21. **N3 业务/行业层（待做）**：把登记的国标行业 `gb_industry_*`（门类/大类/中类/小类，已是结构化字段）确定性 MERGE 成 `(:Industry)` 四级树 + `(公司)-[:属于行业]->(小类)`，与股权层共图；一条 Cypher 可查"同行业 + 同控制人"集中度线索（仍线索级、须人工复核）。**不用 LLM 建节点**（分类已在数据里，LLM 会把确定事实降级成推断、且读 `business_scope` 越"不结构化经营范围"红线）；自由文本仍走语义 scope。LLM 至多碰查询侧（把业务输入模糊映射到行业码，只发查询文本，同 C1）。
+
 ## 本地数据状态
 
 目录：
