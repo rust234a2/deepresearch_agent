@@ -108,3 +108,4 @@ class ResearchState(BaseModel):
     scope_candidates: list[ScopeCandidate] = Field(default_factory=list)
     graph_candidates: list[GraphSearchCandidate] = Field(default_factory=list)
     shared_controllers: list[SharedControllerFinding] = Field(default_factory=list)
+    degradations: list[str] = Field(default_factory=list)

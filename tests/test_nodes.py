@@ -424,3 +424,8 @@ def test_writer_graph_report_unavailable(company_database_path):
     updated = writer_node(state, DOMAIN_PACK)
     assert "不可用" in updated.graph_report.summary
     assert updated.graph_report.candidates == []
+
+
+def test_research_state_has_degradations_field():
+    state = ResearchState(question="q", domain="procurement")
+    assert state.degradations == []
