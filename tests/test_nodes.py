@@ -3,6 +3,7 @@ from pathlib import Path
 from deepresearch_agent.agents.nodes import critique_node, planner_node, researcher_node, writer_node
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.graph_retrieval import assemble_subgraph_context
+from deepresearch_agent.ownership_backend import InMemoryOwnershipBackend
 from deepresearch_agent.ownership_graph import load_ownership_graph
 from deepresearch_agent.domain import load_domain_pack
 from deepresearch_agent.state import ResearchState
@@ -304,7 +305,7 @@ def test_researcher_scope_mode_unavailable_when_retriever_missing(company_databa
 def test_researcher_graph_mode_builds_candidates_and_shared(tmp_path, company_database_path):
     graph = _ownership_graph(tmp_path)
     seeds = ["91110000000000111A", "91110000000000222B", "91110000000000333C"]
-    searcher = lambda query: assemble_subgraph_context(graph, seeds, query=query)
+    searcher = lambda query: assemble_subgraph_context(InMemoryOwnershipBackend(graph), seeds, query=query)
     repository = _repository(company_database_path)
     state = planner_node(
         ResearchState(question="哪些做注塑的供应商互相关联", domain="procurement"),

@@ -112,10 +112,11 @@ def _build_graph_searcher(database_path: str | Path, scope_retriever):
         return None
     try:
         from deepresearch_agent.graph_retrieval import hybrid_search
+        from deepresearch_agent.ownership_backend import InMemoryOwnershipBackend
         from deepresearch_agent.ownership_graph import load_ownership_graph
 
-        graph = load_ownership_graph(CompanyRepository(database_path))
-        return lambda query: hybrid_search(query, scope_retriever, graph)
+        backend = InMemoryOwnershipBackend(load_ownership_graph(CompanyRepository(database_path)))
+        return lambda query: hybrid_search(query, scope_retriever, backend)
     except Exception:
         return None
 

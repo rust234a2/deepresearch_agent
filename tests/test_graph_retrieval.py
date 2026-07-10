@@ -3,6 +3,7 @@ from pathlib import Path
 from deepresearch_agent.company_database import build_company_database
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.graph_retrieval import assemble_subgraph_context, hybrid_search
+from deepresearch_agent.ownership_backend import InMemoryOwnershipBackend
 from deepresearch_agent.ownership_graph import load_ownership_graph
 
 
@@ -27,7 +28,7 @@ def _graph(tmp_path: Path):
 def test_assemble_shared_controllers_across_seeds(tmp_path):
     graph = _graph(tmp_path)
 
-    ctx = assemble_subgraph_context(graph, [A_CODE, B_CODE, C_CODE])
+    ctx = assemble_subgraph_context(InMemoryOwnershipBackend(graph), [A_CODE, B_CODE, C_CODE])
 
     shared = {s.node_id: s for s in ctx.shared_controllers}
     # 共同控股集团 直接控股 甲、乙，并经 甲投资丙 间接控制 丙 → 控制全部三家
@@ -42,7 +43,7 @@ def test_assemble_shared_controllers_across_seeds(tmp_path):
 def test_assemble_seed_context_controllers_and_neighbors(tmp_path):
     graph = _graph(tmp_path)
 
-    ctx = assemble_subgraph_context(graph, [A_CODE], scores={A_CODE: 0.9})
+    ctx = assemble_subgraph_context(InMemoryOwnershipBackend(graph), [A_CODE], scores={A_CODE: 0.9})
 
     seed = ctx.seeds[0]
     assert seed.code == A_CODE
@@ -62,7 +63,7 @@ def test_assemble_seed_context_controllers_and_neighbors(tmp_path):
 def test_assemble_skips_unknown_seed(tmp_path):
     graph = _graph(tmp_path)
 
-    ctx = assemble_subgraph_context(graph, ["no-such-code"])
+    ctx = assemble_subgraph_context(InMemoryOwnershipBackend(graph), ["no-such-code"])
 
     assert ctx.seeds == []
     assert ctx.shared_controllers == []
@@ -86,7 +87,7 @@ def test_hybrid_search_uses_scope_seeds_sorted_by_score(tmp_path):
     graph = _graph(tmp_path)
     retriever = _StubRetriever([_Hit(B_CODE, 0.7), _Hit(A_CODE, 0.95), _Hit(A_CODE, 0.4)])
 
-    ctx = hybrid_search("注塑成型", retriever, graph)
+    ctx = hybrid_search("注塑成型", retriever, InMemoryOwnershipBackend(graph))
 
     assert ctx.query == "注塑成型"
     assert [s.code for s in ctx.seeds] == [A_CODE, B_CODE]
