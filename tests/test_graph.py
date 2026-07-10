@@ -185,6 +185,18 @@ def test_run_research_scope_search_end_to_end(company_database_path, tmp_path):
     assert state.report is None
 
 
+def test_build_graph_searcher_none_when_neo4j_unavailable(company_database_path, monkeypatch):
+    from deepresearch_agent.agents import graph as graph_module
+    import deepresearch_agent.neo4j_backend as nb
+
+    def boom(cls):
+        raise RuntimeError("neo4j 不可达")
+
+    monkeypatch.setattr(nb.Neo4jBackend, "from_env", classmethod(boom))
+    searcher = graph_module._build_graph_searcher(company_database_path, object())
+    assert searcher is None
+
+
 def test_graph_runtime_failure_degrades_to_scope_end_to_end(company_database_path):
     repository = CompanyRepository(company_database_path)
 
