@@ -63,3 +63,52 @@ def test_loader_populates_neo4j_matching_sqlite(tmp_path):
         assert e == len(repository.iter_graph_edges())
     finally:
         driver.close()
+
+
+def _graph(tmp_path: Path):
+    from deepresearch_agent.company_database import build_company_database
+    from deepresearch_agent.ownership_graph import load_ownership_graph
+
+    database_path = tmp_path / "companies.sqlite3"
+    if not database_path.exists():
+        build_company_database(
+            LINKS / "companies.csv",
+            LINKS / "contacts.csv",
+            database_path,
+            shareholders_csv=LINKS / "shareholders.csv",
+            investments_csv=LINKS / "investments.csv",
+        )
+    return load_ownership_graph(CompanyRepository(database_path))
+
+
+@pytest.mark.neo4j
+def test_neo4j_backend_matches_inmemory(tmp_path):
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from build_ownership_neo4j import build_ownership_neo4j
+
+    from deepresearch_agent.graph_retrieval import assemble_subgraph_context
+    from deepresearch_agent.neo4j_backend import Neo4jBackend
+    from deepresearch_agent.ownership_backend import InMemoryOwnershipBackend
+
+    repository = _repository(tmp_path)
+    graph = _graph(tmp_path)
+    driver = _driver_or_skip()
+    try:
+        build_ownership_neo4j(repository, driver)
+        neo = Neo4jBackend(driver)
+        mem = InMemoryOwnershipBackend(graph)
+
+        assert neo.has_node("no-such") is False
+        assert neo.display_name("no-such") == "no-such"
+        for code in (A_CODE, B_CODE, C_CODE):
+            assert neo.has_node(code) == mem.has_node(code)
+            assert neo.display_name(code) == mem.display_name(code)
+            assert neo.ultimate_controllers(code) == mem.ultimate_controllers(code)
+            assert neo.direct_neighbors(code) == mem.direct_neighbors(code)
+
+        seeds = [A_CODE, B_CODE, C_CODE]
+        assert assemble_subgraph_context(neo, seeds) == assemble_subgraph_context(mem, seeds)
+    finally:
+        driver.close()
