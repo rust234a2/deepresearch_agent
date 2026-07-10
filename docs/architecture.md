@@ -99,9 +99,9 @@ flowchart LR
   - `not_found` + `simple` → `scope`：经营范围语义检索，填 `scope_candidates`；
   - `not_found` + `medium/complex` → `graph`：GraphRAG 融合（候选 + 最终控制人 + 共享控制人），填 `graph_candidates`/`shared_controllers`；图检索器缺失且 scope 可用时回退 `scope`；
   - `ambiguous` 或均未启用检索 → `unresolved`：不检索。
-  - 检索器缺失/异常置 `retrieval_available=False`，不抛出。
+  - **降级链（C4）**：graph **运行时抛异常** → 有 scope 就降级 scope（`retrieval_available` 重置为 True 重试 scope）、无 scope 则记"无可用降级路径"；scope 运行时异常 → 终点"不可用"。**运行时失败**追加到 `state.degradations`（配置性缺失——检索器为 None——不记，保持告警信号纯净）。检索器缺失/异常置 `retrieval_available=False`，不抛出。
 - **critic**：计划维度减已覆盖维度算缺口，非空且未超预算（`iteration < 3`）回 researcher（实际只有 `named` 路径会累积维度、可能回环）。
-- **writer = 生成层**：唯一报告生成者，按 `retrieval_mode` 产出 `SupplierReport`(named/unresolved) / `ScopeSearchReport`(scope) / `GraphSearchReport`(graph)，所有 summary/open_questions/`insufficient_evidence`/人工复核提示都在此生成；检索器不可用时产出对应"不可用"报告。
+- **writer = 生成层**：唯一报告生成者，按 `retrieval_mode` 产出 `SupplierReport`(named/unresolved) / `ScopeSearchReport`(scope) / `GraphSearchReport`(graph)，所有 summary/open_questions/`insufficient_evidence`/人工复核提示都在此生成；检索器不可用时产出对应"不可用"报告。`state.degradations` 被插入报告 `open_questions` 最前面，让降级过程可见。
 
 `enable_scope`/`enable_graph` 由 CLI 控制（`--graph` 从"强制图检索"变为"允许图检索，由复杂度决定用不用"）；`/research` API 不启用检索、形状不变。旧的 `scope_search_node`/`graph_search_node` 独立节点与 planner 后条件路由已撤销，检索/生成职责收口到 researcher/writer 两层。
 

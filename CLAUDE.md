@@ -85,7 +85,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `StateGraph(ResearchState)`，**纯线性** `planner → researcher → critic → writer → END`（C2 起，检索/生成分层）。仅 critic 后一处条件回环。
 
 - **planner**：`resolve_supplier` 解析企业 + `classify_complexity` 写 `state.complexity`（LLM 只发查询文本，无 key/无 `.[llm]` 走确定性启发式），不检索。
-- **researcher = 检索层**：按 `解析状态 × 复杂度 × 是否启用检索` 分派并只做检索：`resolved`→`named`（调白名单私有工具）；`not_found`+`simple`→`scope`（经营范围语义检索，填 `scope_candidates`）；`not_found`+`medium/complex`→`graph`（GraphRAG 融合，填 `graph_candidates`/`shared_controllers`，缺 searcher 且 scope 可用则回退 scope）；`ambiguous` 或均未启用→`unresolved`（不检索）。检索器缺失/异常置 `retrieval_available=False`，不抛出、不写报告叙述。
+- **researcher = 检索层**：按 `解析状态 × 复杂度 × 是否启用检索` 分派并只做检索：`resolved`→`named`（调白名单私有工具）；`not_found`+`simple`→`scope`（经营范围语义检索，填 `scope_candidates`）；`not_found`+`medium/complex`→`graph`（GraphRAG 融合，填 `graph_candidates`/`shared_controllers`，缺 searcher 且 scope 可用则回退 scope）；`ambiguous` 或均未启用→`unresolved`（不检索）。检索器缺失/异常置 `retrieval_available=False`，不抛出、不写报告叙述。**降级链（C4）**：graph 运行时抛异常 → 有 scope 就降级 scope、无 scope 记“无可用降级路径”；scope 运行时异常为终点。**只有运行时失败**记入 `state.degradations`（配置性缺失不记），writer 把它插到报告 `open_questions` 最前面。不做重试。
 - **critic 后**：`missing_dimensions` 非空且 `iteration < max_iterations(3)` 则回 researcher，否则进 writer（实际只有 `named` 会累积维度、可能回环）。
 - **writer = 唯一生成层**：按 `retrieval_mode` 出 `SupplierReport`(named/unresolved) / `ScopeSearchReport`(scope) / `GraphSearchReport`(graph)，所有 summary/open_questions/`insufficient_evidence`/人工复核提示与“不可用”报告都在此生成。
 
