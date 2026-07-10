@@ -318,3 +318,17 @@ def test_iter_graph_edges_maps_endpoints_to_node_ids(tmp_path):
         e for e in edges if e.source_node_id.startswith("fund:") and e.target_node_id == A_CODE
     )
     assert fund_edge.edge_type == "shareholding"
+
+
+def test_iter_company_industries_returns_four_level_names(company_database_path):
+    repo = CompanyRepository(company_database_path)
+
+    rows = repo.iter_company_industries()
+
+    assert len(rows) == len(repo.get_all_company_names())
+    with_class = [r for r in rows if r.gb_industry_class]
+    assert with_class, "fixture 应至少有一家带小类行业"
+    sample = with_class[0]
+    assert sample.gb_industry_section and sample.gb_industry_division
+    assert sample.gb_industry_group and sample.gb_industry_class
+    assert sample.unified_social_credit_code

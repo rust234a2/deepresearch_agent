@@ -303,3 +303,22 @@ class GraphEdge(BaseModel):
     @classmethod
     def parse_blanks(cls, value: object) -> object:
         return none_if_blank(value)
+
+
+class CompanyIndustry(BaseModel):
+    unified_social_credit_code: str
+    gb_industry_section: str | None = None
+    gb_industry_division: str | None = None
+    gb_industry_group: str | None = None
+    gb_industry_class: str | None = None
+
+    @field_validator(
+        "gb_industry_section",
+        "gb_industry_division",
+        "gb_industry_group",
+        "gb_industry_class",
+        mode="before",
+    )
+    @classmethod
+    def _blank_to_none(cls, value: object) -> object:
+        return none_if_blank(value)

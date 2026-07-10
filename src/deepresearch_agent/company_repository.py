@@ -7,6 +7,7 @@ from pathlib import Path
 from deepresearch_agent.company_database import SCHEMA_VERSION, normalize_company_name
 from deepresearch_agent.company_models import (
     CompanyContact,
+    CompanyIndustry,
     CompanyProfile,
     CompanyRecord,
     CompanyResolution,
@@ -221,6 +222,15 @@ class CompanyRepository:
                 "SELECT unified_social_credit_code, legal_name FROM companies"
             ).fetchall()
         return {row["unified_social_credit_code"]: row["legal_name"] for row in rows}
+
+    def iter_company_industries(self) -> list[CompanyIndustry]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT unified_social_credit_code, gb_industry_section, "
+                "gb_industry_division, gb_industry_group, gb_industry_class "
+                "FROM companies"
+            ).fetchall()
+        return [CompanyIndustry.model_validate(dict(row)) for row in rows]
 
     def iter_shareholder_edges(self) -> list[OwnershipEdge]:
         with self._connect() as connection:
