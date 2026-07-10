@@ -271,7 +271,8 @@ def _write_scope_report(state: ResearchState) -> ResearchState:
             summary="经营范围语义检索不可用：请安装 .[rag] 可选依赖并运行 "
             "scripts/build_scope_index.py 构建索引。",
             candidates=[],
-            open_questions=["安装 .[rag] 可选依赖并构建 FAISS 经营范围索引。"],
+            open_questions=list(state.degradations)
+            + ["安装 .[rag] 可选依赖并构建 FAISS 经营范围索引。"],
         )
         return state
     candidates = state.scope_candidates
@@ -286,7 +287,7 @@ def _write_scope_report(state: ResearchState) -> ResearchState:
         query=state.question,
         summary=summary,
         candidates=candidates,
-        open_questions=list(_SCOPE_OPEN_QUESTIONS),
+        open_questions=list(state.degradations) + list(_SCOPE_OPEN_QUESTIONS),
     )
     return state
 
@@ -298,7 +299,7 @@ def _write_graph_report(state: ResearchState) -> ResearchState:
             summary="图谱关系检索不可用：请安装 .[rag] 可选依赖并构建 FAISS 经营范围索引与公司图谱。",
             candidates=[],
             shared_controllers=[],
-            open_questions=["安装 .[rag] 可选依赖并构建 FAISS 索引。"],
+            open_questions=list(state.degradations) + ["安装 .[rag] 可选依赖并构建 FAISS 索引。"],
         )
         return state
     candidates = state.graph_candidates
@@ -320,7 +321,7 @@ def _write_graph_report(state: ResearchState) -> ResearchState:
         summary=summary,
         candidates=candidates,
         shared_controllers=shared,
-        open_questions=list(_GRAPH_OPEN_QUESTIONS),
+        open_questions=list(state.degradations) + list(_GRAPH_OPEN_QUESTIONS),
     )
     return state
 

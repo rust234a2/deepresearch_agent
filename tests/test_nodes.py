@@ -542,3 +542,34 @@ def test_researcher_missing_retriever_records_no_degradation(company_database_pa
     assert updated.retrieval_mode == "scope"
     assert updated.retrieval_available is False
     assert updated.degradations == []
+
+
+def test_writer_scope_report_surfaces_degradations():
+    from deepresearch_agent.state import ScopeCandidate
+
+    state = ResearchState(question="q", domain="procurement")
+    state.retrieval_mode = "scope"
+    state.degradations = ["图检索运行时失败：X，已降级为经营范围检索。"]
+    state.scope_candidates = [
+        ScopeCandidate(unified_social_credit_code="X", legal_name="甲", matched_clauses=[], top_score=0.9)
+    ]
+    updated = writer_node(state, DOMAIN_PACK)
+    assert updated.scope_report.open_questions[0] == "图检索运行时失败：X，已降级为经营范围检索。"
+
+
+def test_writer_scope_unavailable_surfaces_degradations():
+    state = ResearchState(question="q", domain="procurement")
+    state.retrieval_mode = "scope"
+    state.retrieval_available = False
+    state.degradations = ["经营范围检索运行时失败：Y。"]
+    updated = writer_node(state, DOMAIN_PACK)
+    assert updated.scope_report.open_questions[0] == "经营范围检索运行时失败：Y。"
+
+
+def test_writer_graph_unavailable_surfaces_degradations():
+    state = ResearchState(question="q", domain="procurement")
+    state.retrieval_mode = "graph"
+    state.retrieval_available = False
+    state.degradations = ["图检索运行时失败：Z，无可用降级路径。"]
+    updated = writer_node(state, DOMAIN_PACK)
+    assert updated.graph_report.open_questions[0] == "图检索运行时失败：Z，无可用降级路径。"
