@@ -183,3 +183,22 @@ def test_run_research_scope_search_end_to_end(company_database_path, tmp_path):
     assert state.scope_report.candidates
     assert state.scope_report.recommendation == "insufficient_evidence"
     assert state.report is None
+
+
+def test_graph_runtime_failure_degrades_to_scope_end_to_end(company_database_path):
+    repository = CompanyRepository(company_database_path)
+
+    def boom(query):
+        raise RuntimeError("图加载失败")
+
+    app = build_graph(
+        DOMAIN_PACK, repository,
+        scope_retriever=_ScopeRetriever(), graph_searcher=boom,
+        scope_enabled=True, graph_enabled=True,
+    )
+    state = run_compiled(app, "哪些做注塑的供应商互相关联", "procurement")
+    assert state.scope_report is not None
+    assert state.scope_report.candidates
+    assert "已降级为经营范围检索" in state.scope_report.open_questions[0]
+    assert state.graph_report is None
+    assert state.report is None
