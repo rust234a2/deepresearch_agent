@@ -76,6 +76,7 @@ ORDER BY depth, node_id
 - `pyproject.toml`：新增可选依赖 `neo4j = ["neo4j>=5.0"]`；`[tool.pytest.ini_options]` 注册 `neo4j` marker。
 - `.env.example`：加 `NEO4J_URI=bolt://localhost:7687`、`NEO4J_USER=neo4j`、`NEO4J_PASSWORD=`。
 - 仓库根加 `docker-compose.yml`：`neo4j:5` 镜像，端口 `7687`(bolt)/`7474`(browser)，`NEO4J_AUTH` 从环境注入，数据卷本地持久化。**仅本地**。
+- **可视化开箱即用（零额外代码）**：灌图后 Neo4j Browser（`localhost:7474`）一句 `MATCH (n:Entity)-[r]->(m) RETURN n,r,m` 即渲染可交互股权网（按 `node_type` 着色、按边类型区分）。这是选 Neo4j 的核心收益之一，N2 无需为可视化写任何代码。
 
 ## 生产接线（Neo4j 单引擎）
 
