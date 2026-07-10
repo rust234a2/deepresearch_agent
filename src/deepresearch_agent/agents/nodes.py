@@ -86,7 +86,19 @@ def researcher_node(
     elif mode == "scope":
         _retrieve_scope(state, scope_retriever)
     elif mode == "graph":
-        _retrieve_graph(state, graph_searcher)
+        graph_error = _retrieve_graph(state, graph_searcher)
+        if graph_error:
+            if scope_retriever is not None:
+                state.degradations.append(
+                    f"图检索运行时失败：{graph_error}，已降级为经营范围检索。"
+                )
+                state.retrieval_mode = "scope"
+                state.retrieval_available = True
+                _retrieve_scope(state, scope_retriever)
+            else:
+                state.degradations.append(
+                    f"图检索运行时失败：{graph_error}，无可用降级路径。"
+                )
     return state
 
 
@@ -157,24 +169,26 @@ def _retrieve_scope(state: ResearchState, retriever) -> None:
         return
     try:
         hits = retriever.search(state.question, SCOPE_SEARCH_K)
-    except Exception:
+    except Exception as exc:
         state.retrieval_available = False
+        state.degradations.append(f"经营范围检索运行时失败：{exc}。")
         return
     state.scope_candidates = _group_scope_hits(hits)
 
 
-def _retrieve_graph(state: ResearchState, searcher) -> None:
+def _retrieve_graph(state: ResearchState, searcher) -> str | None:
     if searcher is None:
         state.retrieval_available = False
-        return
+        return None
     try:
         context = searcher(state.question)
-    except Exception:
+    except Exception as exc:
         state.retrieval_available = False
-        return
+        return str(exc)
     candidates, shared = _build_graph_findings(context)
     state.graph_candidates = candidates
     state.shared_controllers = shared
+    return None
 
 
 def _build_graph_findings(context):

@@ -429,3 +429,116 @@ def test_writer_graph_report_unavailable(company_database_path):
 def test_research_state_has_degradations_field():
     state = ResearchState(question="q", domain="procurement")
     assert state.degradations == []
+
+
+def test_retrieve_graph_returns_error_string_on_exception():
+    from deepresearch_agent.agents.nodes import _retrieve_graph
+
+    state = ResearchState(question="q", domain="procurement")
+
+    def boom(query):
+        raise RuntimeError("图加载失败")
+
+    err = _retrieve_graph(state, boom)
+    assert err is not None and "图加载失败" in err
+    assert state.retrieval_available is False
+
+
+def test_retrieve_graph_returns_none_on_missing_and_success():
+    from deepresearch_agent.agents.nodes import _retrieve_graph
+    from deepresearch_agent.graph_retrieval import HybridContext, SeedContext
+
+    missing_state = ResearchState(question="q", domain="procurement")
+    assert _retrieve_graph(missing_state, None) is None
+    assert missing_state.retrieval_available is False
+
+    ok_state = ResearchState(question="q", domain="procurement")
+
+    def searcher(query):
+        return HybridContext(
+            query=query,
+            seeds=[SeedContext(code="X", name="示例", score=0.9, controllers=[], neighbors=[])],
+            shared_controllers=[],
+        )
+
+    assert _retrieve_graph(ok_state, searcher) is None
+    assert len(ok_state.graph_candidates) == 1
+
+
+def test_researcher_graph_runtime_failure_degrades_to_scope(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="哪些做注塑的供应商互相关联", domain="procurement"),
+        DOMAIN_PACK, repository,
+    )
+
+    def boom(query):
+        raise RuntimeError("图加载失败")
+
+    updated = researcher_node(
+        state, ToolRegistry(), DOMAIN_PACK,
+        scope_retriever=_ScopeRetriever(), graph_searcher=boom,
+        scope_enabled=True, graph_enabled=True,
+    )
+    assert updated.retrieval_mode == "scope"
+    assert len(updated.scope_candidates) == 1
+    assert updated.retrieval_available is True
+    assert len(updated.degradations) == 1
+    assert "已降级为经营范围检索" in updated.degradations[0]
+    assert "图加载失败" in updated.degradations[0]
+
+
+def test_researcher_graph_runtime_failure_without_scope_records_no_path(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="哪些做注塑的供应商互相关联", domain="procurement"),
+        DOMAIN_PACK, repository,
+    )
+
+    def boom(query):
+        raise RuntimeError("图加载失败")
+
+    updated = researcher_node(
+        state, ToolRegistry(), DOMAIN_PACK,
+        scope_retriever=None, graph_searcher=boom,
+        scope_enabled=False, graph_enabled=True,
+    )
+    assert updated.retrieval_mode == "graph"
+    assert updated.retrieval_available is False
+    assert len(updated.degradations) == 1
+    assert "无可用降级路径" in updated.degradations[0]
+
+
+def test_researcher_scope_runtime_failure_records_degradation(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="哪些企业能做注塑成型", domain="procurement"),
+        DOMAIN_PACK, repository,
+    )
+
+    class _BoomRetriever:
+        def search(self, query, k):
+            raise RuntimeError("faiss 索引损坏")
+
+    updated = researcher_node(
+        state, ToolRegistry(), DOMAIN_PACK,
+        scope_retriever=_BoomRetriever(), scope_enabled=True,
+    )
+    assert updated.retrieval_mode == "scope"
+    assert updated.retrieval_available is False
+    assert len(updated.degradations) == 1
+    assert "经营范围检索运行时失败" in updated.degradations[0]
+
+
+def test_researcher_missing_retriever_records_no_degradation(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="哪些企业能做注塑成型", domain="procurement"),
+        DOMAIN_PACK, repository,
+    )
+    updated = researcher_node(
+        state, ToolRegistry(), DOMAIN_PACK, scope_retriever=None, scope_enabled=True
+    )
+    assert updated.retrieval_mode == "scope"
+    assert updated.retrieval_available is False
+    assert updated.degradations == []
