@@ -27,6 +27,9 @@ rag = [
 llm = [
   "openai>=1.0",
 ]
+neo4j = [
+  "neo4j>=5.0",
+]
 
 [project.scripts]
 deepresearch = "deepresearch_agent.cli:main"
@@ -41,7 +44,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-addopts = "-q -m 'not slow'"
+addopts = "-q -m 'not slow and not neo4j'"
 markers = [
   "slow: 需要重型 ML 依赖或模型下载，默认排除",
+  "neo4j: 需要本地 Neo4j（docker compose up）的对拍测试，默认排除",
 ]
