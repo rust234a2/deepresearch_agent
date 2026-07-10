@@ -1,20 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel
 
 from deepresearch_agent.graph_traversal import ControllerResult, ultimate_controllers
+from deepresearch_agent.ownership_backend import NeighborEdge
 from deepresearch_agent.ownership_graph import OwnershipGraph
-
-
-class NeighborEdge(BaseModel):
-    node_id: str
-    name: str
-    node_type: str
-    edge_type: Literal["shareholding", "investment"]
-    direction: Literal["in", "out"]
-    holding_pct: str | None = None
 
 
 class SeedContext(BaseModel):
