@@ -1,4 +1,4 @@
 source_name,legal_name,registration_status,unified_social_credit_code,legal_representative,company_type,registered_capital_amount,registered_capital_currency,registered_capital_original,paid_in_capital_amount,paid_in_capital_currency,paid_in_capital_original,established_date,business_term_start,business_term_end,business_term_indefinite,registered_address,province,city,district,registration_authority,gb_industry_section,gb_industry_division,gb_industry_group,gb_industry_class,enterprise_size,business_scope,aliases,english_name,website,employee_count,employee_count_report_year,latest_annual_report_year,taxpayer_qualification
-甲公司,甲公司,存续,91110000000000111A,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,
-乙公司,乙公司,存续,91110000000000222B,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,
-丙公司,丙公司,存续,91110000000000333C,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,
+甲公司,甲公司,存续,91110000000000111A,,,,,,,,,,,,false,,,,,,制造业,通用设备制造业,金属加工机械制造,金属切削机床制造,,,,,,,,,
+乙公司,乙公司,存续,91110000000000222B,,,,,,,,,,,,false,,,,,,制造业,通用设备制造业,金属加工机械制造,金属切削机床制造,,,,,,,,,
+丙公司,丙公司,存续,91110000000000333C,,,,,,,,,,,,false,,,,,,制造业,通用设备制造业,金属加工机械制造,金属切削机床制造,,,,,,,,,
