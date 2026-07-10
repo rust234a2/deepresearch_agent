@@ -38,6 +38,8 @@
 17. **C2 查询编排（检索/生成分层）**：图收敛为纯线性 `planner → researcher → critic → writer`。planner 解析 + 分类（不检索）；**researcher = 检索层**，按 `解析状态 × 复杂度 × 是否启用` 分派 `named`(四工具) / `scope` / `graph`(缺 searcher 且 scope 可用则回退) / `unresolved`，只检索、落 state 中间态；**writer = 唯一生成层**，按 `retrieval_mode` 出 `SupplierReport`/`ScopeSearchReport`/`GraphSearchReport`，所有叙述与不可用提示在此。撤销 `scope_search_node`/`graph_search_node` 独立节点与 planner 条件路由。`--graph` 语义变为“允许图检索、由复杂度决定用不用”；`/research` API 形状不变。合并了原 C3（结构化生成即 writer 单独做）。
 18. **C4 降级链 + 降级留痕**：graph **运行时抛异常**（非缺失）时——有 scope 就**降级 scope**（`retrieval_available` 重置后重试 scope）、无 scope 记“无可用降级路径”；scope 运行时异常为终点“不可用”。**只有运行时失败**追加到新字段 `state.degradations`，配置性缺失（检索器 None、LLM 回退启发式）不记；writer 把 `degradations` 插入报告 `open_questions` 最前面。不做重试（YAGNI）；`graph.py`/`cli.py`/`api.py`/schema 均不动。**至此 GraphRAG + 查询编排路线图（A–C）收尾。**
 
+19. **N1 股权图后端接口抽象**（引入 Neo4j 替换内存图的第一步，纯重构、零行为变化）：新增 `ownership_backend.py` 的 `OwnershipGraphBackend` 协议（`has_node`/`display_name`/`ultimate_controllers`/`direct_neighbors`）+ `InMemoryOwnershipBackend`；`NeighborEdge` 从 `graph_retrieval` 迁入;`hybrid_search`/`assemble_subgraph_context` 改吃 backend；`graph.py` 灌图后包 backend。`ego`/`common_controllers`/`shortest_path` 不在协议（非 Agent 热路径，保留）。**N2 待做**：`.[neo4j]` 可选 extra + 本地 Docker + SQLite→Neo4j 灌图 + Cypher 版 `Neo4jBackend` + 双实现对拍（CI 跑内存实现、真 Neo4j 测试标 slow 本地跑）；Neo4j 必须本地自建（数据本地化红线，不用云 Aura）。
+
 ## 本地数据状态
 
 目录：

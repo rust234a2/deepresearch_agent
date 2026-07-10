@@ -122,6 +122,7 @@ flowchart LR
 
 ## 后续能力
 
+- **N2：Neo4j 后端替换内存图**（N1 已抽出 `OwnershipGraphBackend` 可插拔接口，`hybrid_search`/`assemble_subgraph_context` 走它；内存实现 `InMemoryOwnershipBackend` 现为生产 + CI 测试替身，N2 加 Cypher 实现的 `Neo4jBackend` 并做双实现对拍）。
 - 方案 B：scope 筛选 top-N 后对每家自动跑工商核验（便利层，按 YAGNI 缓做）。
 - `/research` API 端到端暴露 scope。
 - 制裁、司法、新闻、财务和采购履约独立数据源。
