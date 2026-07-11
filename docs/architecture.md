@@ -127,5 +127,5 @@ flowchart LR
 - `/research` API 端到端暴露 scope。
 - 制裁、司法、新闻、财务和采购履约独立数据源。
 - ruff + mypy 静态检查。
-- RAGAS 评估、Phoenix 轨迹调试和 golden cases。
+- eval 扩展：真实 golden 集补齐（本地跑真实数字）、GraphRAG 精准率（人工抽检 via_person）、接入风险/推荐数据源后补对应指标；Phoenix 本地轨迹调试；RAGAS/LLM-as-judge 待本地 LLM 就绪且确定性基线稳定后再评估。
 - GraphRAG、MCP、Qdrant 和持久化 checkpoint。

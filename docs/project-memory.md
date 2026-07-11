@@ -45,6 +45,8 @@
 
 22. **N4 graph 报告"同行业+同控制人"围标线索**（把 N3 行业层变成 Agent 尽调信号）：后端协议加 `company_industry(node_id) -> str | None`（`Neo4jBackend` 查 `IN_INDUSTRY`；`InMemoryOwnershipBackend` 返 None → 优雅降级、不误报、N2 对拍不破）；`assemble_subgraph_context` 给每个共享控制人算 `concentrated_industries`（它控制的候选里 ≥2 家落同一行业的行业名）；字段透传 `SharedController`→`SharedControllerFinding`；writer 非空则 note 升级"同行业（X）+同控制人，疑似围标/集中度线索，须人工复核"、summary 追加计数。**仍线索级、须人工复核、绝不认定围标**（同名自然人可能非同一人；同控制人≠实际串通）；无 LLM。检测逻辑 CI 用假后端测，真 Neo4j 端到端另测（甲乙丙同四级行业+共享控制人→出线索）。业务价值：发现"看着像 N 家竞争、其实一只手"的虚假竞争/围标嫌疑。
 
+23. **Eval v1 确定性评测机制**（新 `eval/` 包 + `eval` CLI 子命令）：只测两块真决策——**企业识别 P/R**（`resolve_supplier`，`run_entity_resolution`，零下载 CI 核心）、**scope recall@k**（`ScopeRetriever`，`run_scope_recall`，标 `@pytest.mark.slow` 需 bge）。`models.py`(GoldenEntityCase/GoldenScopeCase + 指标模型) + `metrics.py`(纯集合运算) + `runner.py`(复用 `run_research` 同源组件、不建第二条路径)。推荐准确率/风险命中率 = **N/A**（Agent 固定 insufficient_evidence）；GraphRAG 精准率后置（via_person 同名假阳性数据内无真值）。**不引入 RAGAS/LlamaIndex/Phoenix**（LLM-as-judge 撞本地化红线、顺序应在确定性基线之后；Phoenix 留作后续本地调试）。双轨 golden：合成提交（`evals/procurement/*.synthetic.yaml`，CI 跑 accuracy=1.0）+ 真实本地（`*.local.yaml` gitignore）。CLI：`python -m deepresearch_agent.cli eval entity|scope --database ... --cases ...`（手动分派，单问题路径向后兼容）。取代作废的 2026-06-18 旧 eval spec。
+
 ## 本地数据状态
 
 目录：

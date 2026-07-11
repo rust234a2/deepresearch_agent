@@ -63,6 +63,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # API（POST /research，body: {"question": "...", "domain": "procurement"}）
 .\.conda-env\python.exe -m uvicorn deepresearch_agent.api:app --reload
+
+# Eval v1 确定性评测（企业识别 P/R = 零下载 CI 核心；scope recall@k 需 bge、标 slow）
+.\.conda-env\python.exe -m deepresearch_agent.cli eval entity `
+  --database data/procurement/derived/companies.sqlite3 `
+  --cases evals/procurement/entity_resolution.synthetic.yaml
 ```
 
 语义经营范围检索（跨企业按内容找企业，需 `.[rag]` 可选依赖与已构建的 FAISS 索引）：
