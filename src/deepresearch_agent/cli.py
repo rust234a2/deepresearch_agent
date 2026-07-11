@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 from rich.console import Console
 from rich.table import Table
@@ -10,6 +11,10 @@ from deepresearch_agent.state import GraphSearchReport, ScopeSearchReport, Suppl
 
 
 def main(argv: list[str] | None = None) -> None:
+    raw = sys.argv[1:] if argv is None else argv
+    if raw and raw[0] == "eval":
+        _eval_main(raw[1:])
+        return
     parser = argparse.ArgumentParser(description="Run a procurement DeepResearch supplier assessment.")
     parser.add_argument(
         "question",
@@ -105,6 +110,51 @@ def _print_graph_report(console: Console, report: GraphSearchReport) -> None:
             finding.note,
         )
     console.print(shared)
+
+
+def _eval_main(argv: list[str]) -> None:
+    from deepresearch_agent.company_repository import CompanyRepository
+    from deepresearch_agent.eval.runner import (
+        load_entity_cases,
+        load_scope_cases,
+        run_entity_resolution,
+        run_scope_recall,
+    )
+
+    parser = argparse.ArgumentParser(prog="cli eval", description="确定性评测（企业识别 / scope 召回）。")
+    sub = parser.add_subparsers(dest="kind", required=True)
+
+    p_entity = sub.add_parser("entity", help="企业识别 P/R")
+    p_entity.add_argument("--database", required=True)
+    p_entity.add_argument("--cases", required=True)
+
+    p_scope = sub.add_parser("scope", help="scope 检索 recall@k")
+    p_scope.add_argument("--database", required=True)
+    p_scope.add_argument("--index", required=True)
+    p_scope.add_argument("--cases", required=True)
+
+    args = parser.parse_args(argv)
+    console = Console()
+
+    if args.kind == "entity":
+        repository = CompanyRepository(args.database)
+        m = run_entity_resolution(repository, load_entity_cases(args.cases))
+        console.print("[bold]Eval: entity resolution (procurement)[/bold]")
+        console.print(
+            f"  cases={m.total}  accuracy={m.accuracy:.2f}  "
+            f"resolved_precision={m.resolved_precision:.2f}  resolved_recall={m.resolved_recall:.2f}"
+        )
+    else:
+        from deepresearch_agent.rag.embedding import BgeEmbedder
+        from deepresearch_agent.rag.retriever import load_scope_retriever
+
+        retriever = load_scope_retriever(args.database, args.index, BgeEmbedder())
+        m = run_scope_recall(retriever, load_scope_cases(args.cases))
+        console.print("[bold]Eval: scope recall@k (procurement)[/bold]")
+        console.print(
+            f"  cases={m.total}  mean_recall_at_k={m.mean_recall_at_k:.2f}  "
+            f"mean_precision_at_k={m.mean_precision_at_k:.2f}"
+        )
 
 
 if __name__ == "__main__":

@@ -44,3 +44,28 @@ def test_cli_renders_scope_unavailable_for_capability_question(company_database_
     out = capsys.readouterr().out
     assert "不可用" in out
     assert "insufficient_evidence" in out
+
+
+def test_cli_eval_entity_prints_metrics(company_database_path, capsys):
+    main(
+        [
+            "eval", "entity",
+            "--database", str(company_database_path),
+            "--cases", "evals/procurement/entity_resolution.synthetic.yaml",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert "entity resolution" in out
+    assert "accuracy=1.00" in out
+
+
+def test_cli_question_path_still_works(company_database_path, tmp_path, capsys):
+    main(
+        [
+            "核验示例科技股份有限公司",
+            "--database", str(company_database_path),
+            "--index", str(tmp_path / "missing.faiss"),
+        ]
+    )
+    out = capsys.readouterr().out
+    assert "示例科技股份有限公司" in out
