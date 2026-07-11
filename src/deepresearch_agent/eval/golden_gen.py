@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import random
+from pathlib import Path
+
+import yaml
 
 from deepresearch_agent.company_database import normalize_company_name
 from deepresearch_agent.company_repository import _contains_name
@@ -116,3 +119,42 @@ def category_counts(cases: list[GoldenEntityCase]) -> dict[str, int]:
                 counts[prefix] += 1
                 break
     return counts
+
+
+def _case_to_dict(case: GoldenEntityCase) -> dict:
+    data = {
+        "case_id": case.case_id,
+        "question": case.question,
+        "expected_status": case.expected_status,
+    }
+    if case.expected_code is not None:
+        data["expected_code"] = case.expected_code
+    if case.expected_candidate_codes:
+        data["expected_candidate_codes"] = case.expected_candidate_codes
+    return data
+
+
+def write_golden(
+    repository,
+    output_path,
+    *,
+    seed: int = 20260712,
+    n_legal: int = 25,
+    n_alias: int = 15,
+    n_not_found: int = 10,
+    ambiguous_cap: int = 25,
+) -> dict[str, int]:
+    cases = generate_entity_golden(
+        repository.get_all_company_names(),
+        repository.iter_aliases(),
+        seed=seed,
+        n_legal=n_legal,
+        n_alias=n_alias,
+        n_not_found=n_not_found,
+        ambiguous_cap=ambiguous_cap,
+    )
+    payload = {"cases": [_case_to_dict(c) for c in cases]}
+    Path(output_path).write_text(
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+    return category_counts(cases)

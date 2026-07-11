@@ -138,3 +138,20 @@ def test_deterministic_same_seed(golden_repo):
     a = _generate(golden_repo)
     b = _generate(golden_repo)
     assert [c.model_dump() for c in a] == [c.model_dump() for c in b]
+
+
+def test_write_golden_writes_loadable_yaml_and_returns_counts_only(golden_repo, tmp_path):
+    from deepresearch_agent.eval.golden_gen import write_golden
+    from deepresearch_agent.eval.runner import load_entity_cases
+
+    out = tmp_path / "entity_resolution.local.yaml"
+    counts = write_golden(
+        golden_repo, out, seed=1, n_legal=3, n_alias=1, n_not_found=2, ambiguous_cap=25
+    )
+    # 返回值只有整数条数，无企业名（红线：结构上保证只回数字）
+    assert counts == {"resolved_legal": 3, "resolved_alias": 1, "ambiguous": 1, "not_found": 2}
+    assert all(isinstance(v, int) for v in counts.values())
+    # 产出的 yaml 能被评测 loader 正常读回
+    cases = load_entity_cases(out)
+    assert len(cases) == 7
+    assert {c.expected_status for c in cases} == {"resolved", "ambiguous", "not_found"}
