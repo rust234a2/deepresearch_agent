@@ -332,3 +332,12 @@ def test_iter_company_industries_returns_four_level_names(company_database_path)
     assert sample.gb_industry_section and sample.gb_industry_division
     assert sample.gb_industry_group and sample.gb_industry_class
     assert sample.unified_social_credit_code
+
+
+def test_iter_aliases_returns_all_code_alias_pairs(company_database_path):
+    repo = CompanyRepository(company_database_path)
+    pairs = repo.iter_aliases()
+    assert ("91330000123456789X", "示例机械有限公司") in pairs
+    assert ("91330000123456789X", "示例设备有限公司") in pairs
+    # 确定性：按 (code, alias) 升序
+    assert pairs == sorted(pairs)

@@ -223,6 +223,14 @@ class CompanyRepository:
             ).fetchall()
         return {row["unified_social_credit_code"]: row["legal_name"] for row in rows}
 
+    def iter_aliases(self) -> list[tuple[str, str]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT unified_social_credit_code, alias FROM company_aliases "
+                "ORDER BY unified_social_credit_code, alias"
+            ).fetchall()
+        return [(row["unified_social_credit_code"], row["alias"]) for row in rows]
+
     def iter_company_industries(self) -> list[CompanyIndustry]:
         with self._connect() as connection:
             rows = connection.execute(
