@@ -47,6 +47,8 @@
 
 23. **Eval v1 确定性评测机制**（新 `eval/` 包 + `eval` CLI 子命令）：只测两块真决策——**企业识别 P/R**（`resolve_supplier`，`run_entity_resolution`，零下载 CI 核心）、**scope recall@k**（`ScopeRetriever`，`run_scope_recall`，标 `@pytest.mark.slow` 需 bge）。`models.py`(GoldenEntityCase/GoldenScopeCase + 指标模型) + `metrics.py`(纯集合运算) + `runner.py`(复用 `run_research` 同源组件、不建第二条路径)。推荐准确率/风险命中率 = **N/A**（Agent 固定 insufficient_evidence）；GraphRAG 精准率后置（via_person 同名假阳性数据内无真值）。**不引入 RAGAS/LlamaIndex/Phoenix**（LLM-as-judge 撞本地化红线、顺序应在确定性基线之后；Phoenix 留作后续本地调试）。双轨 golden：合成提交（`evals/procurement/*.synthetic.yaml`，CI 跑 accuracy=1.0）+ 真实本地（`*.local.yaml` gitignore）。CLI：`python -m deepresearch_agent.cli eval entity|scope --database ... --cases ...`（手动分派，单问题路径向后兼容）。取代作废的 2026-06-18 旧 eval spec。
 
+24. **Phoenix 本地追踪**（可观测性,只做追踪/可视化,不用 LLM-eval、不引入外部 LLM）：新 `observability.py`——`configure_tracing`(幂等,可注入 exporter,**从本模块持有的 provider 取 tracer、不走 OTel 全局 set_tracer_provider**——它进程内只可设一次无法重置) + `get_tracer`(未配置返 None → 透传零开销) + `reset_tracing` + `traced_node`(图层包装器)。`build_graph(enable_tracing=)` 用 `traced_node` 手动包 planner/researcher/critic/writer 四节点（attr_fn 从返回 state 抽标量:resolution_status/complexity_level/retrieval_mode/候选数/report_type/degradations 等），`run_research(enable_tracing=)` 配置追踪 + root span `research`；CLI `--trace`。**红线**：默认关（正常/CI/API 零影响）、仅本地 OTLP→localhost Phoenix（绝不指远程）、DeepSeek 只记 level/method 不记企业数据、`nodes.py` 不动。`.[trace]` extra（opentelemetry-sdk，轻）；Phoenix 查看器（`arize-phoenix`）本地单独 `pip install` + `phoenix serve`，不作硬依赖。测试用 `InMemorySpanExporter`（`importorskip`，本会话真跑绿,端到端断言 span 树）。
+
 ## 本地数据状态
 
 目录：
