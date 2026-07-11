@@ -76,6 +76,7 @@ class SharedControllerFinding(BaseModel):
     controlled_companies: list[str]
     via_person: bool
     note: str
+    concentrated_industries: list[str] = []
 
 
 class GraphSearchReport(BaseModel):

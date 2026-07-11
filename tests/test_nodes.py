@@ -574,3 +574,66 @@ def test_writer_graph_unavailable_surfaces_degradations():
     state.degradations = ["图检索运行时失败：Z，无可用降级路径。"]
     updated = writer_node(state, DOMAIN_PACK)
     assert updated.graph_report.open_questions[0] == "图检索运行时失败：Z，无可用降级路径。"
+
+
+def test_graph_findings_flag_industry_collusion_note():
+    from deepresearch_agent.agents.nodes import _build_graph_findings
+    from deepresearch_agent.graph_retrieval import HybridContext, SeedContext, SharedController
+
+    context = HybridContext(
+        query="q",
+        seeds=[
+            SeedContext(code="A", name="甲", score=0.9, controllers=[], neighbors=[]),
+            SeedContext(code="C", name="丙", score=0.8, controllers=[], neighbors=[]),
+        ],
+        shared_controllers=[
+            SharedController(
+                node_id="person:张三", name="张三", controlled_seeds=["A", "C"],
+                via_person=True, concentrated_industries=["机床制造"],
+            )
+        ],
+    )
+    _candidates, shared = _build_graph_findings(context)
+    finding = shared[0]
+    assert finding.concentrated_industries == ["机床制造"]
+    assert "同行业" in finding.note and "围标" in finding.note and "须人工复核" in finding.note
+
+
+def test_graph_findings_keep_plain_note_without_concentration():
+    from deepresearch_agent.agents.nodes import _build_graph_findings
+    from deepresearch_agent.graph_retrieval import HybridContext, SeedContext, SharedController
+
+    context = HybridContext(
+        query="q",
+        seeds=[SeedContext(code="A", name="甲", score=0.9, controllers=[], neighbors=[])],
+        shared_controllers=[
+            SharedController(
+                node_id="ext:集团", name="集团", controlled_seeds=["A", "B"],
+                via_person=False, concentrated_industries=[],
+            )
+        ],
+    )
+    _candidates, shared = _build_graph_findings(context)
+    assert shared[0].concentrated_industries == []
+    assert shared[0].note == "经企业股权链推断"
+
+
+def test_writer_graph_summary_flags_collusion(company_database_path):
+    from deepresearch_agent.state import GraphSearchCandidate, SharedControllerFinding
+
+    state = ResearchState(question="q", domain="procurement")
+    state.retrieval_mode = "graph"
+    state.graph_candidates = [
+        GraphSearchCandidate(
+            unified_social_credit_code="A", legal_name="甲", top_score=0.9, ultimate_controllers=[]
+        )
+    ]
+    state.shared_controllers = [
+        SharedControllerFinding(
+            controller_name="张三", controlled_companies=["甲", "丙"], via_person=True,
+            note="同行业（机床制造）+同控制人，疑似围标/集中度线索，须人工复核",
+            concentrated_industries=["机床制造"],
+        )
+    ]
+    updated = writer_node(state, DOMAIN_PACK)
+    assert "同行业+同控制人" in updated.graph_report.summary

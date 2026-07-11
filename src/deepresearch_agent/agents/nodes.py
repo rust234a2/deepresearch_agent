@@ -207,15 +207,26 @@ def _build_graph_findings(context):
         )
         for seed in context.seeds
     ]
-    shared = [
-        SharedControllerFinding(
-            controller_name=item.name,
-            controlled_companies=[name_by_code.get(code, code) for code in item.controlled_seeds],
-            via_person=item.via_person,
-            note="经同名自然人推断，须人工复核" if item.via_person else "经企业股权链推断",
+    shared = []
+    for item in context.shared_controllers:
+        if item.concentrated_industries:
+            note = (
+                f"同行业（{'、'.join(item.concentrated_industries)}）+同控制人，"
+                "疑似围标/集中度线索，须人工复核"
+            )
+        elif item.via_person:
+            note = "经同名自然人推断，须人工复核"
+        else:
+            note = "经企业股权链推断"
+        shared.append(
+            SharedControllerFinding(
+                controller_name=item.name,
+                controlled_companies=[name_by_code.get(code, code) for code in item.controlled_seeds],
+                via_person=item.via_person,
+                note=note,
+                concentrated_industries=item.concentrated_industries,
+            )
         )
-        for item in context.shared_controllers
-    ]
     return candidates, shared
 
 
@@ -306,7 +317,10 @@ def _write_graph_report(state: ResearchState) -> ResearchState:
     shared = state.shared_controllers
     if candidates:
         if shared:
+            collusion = sum(1 for s in shared if s.concentrated_industries)
             middle = f"其中 {len(shared)} 组疑似共享控制人（围标/集中度线索，须人工复核）；"
+            if collusion:
+                middle += f"其中 {collusion} 组同行业+同控制人（更强围标线索，须人工复核）；"
         else:
             middle = "未发现候选间共享控制人；"
         summary = (
