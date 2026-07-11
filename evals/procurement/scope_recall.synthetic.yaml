@@ -1,0 +1,6 @@
+cases:
+  - case_id: industrial_equipment
+    query: 工业设备制造
+    expected_codes:
+      - 91330000123456789X
+    k: 10

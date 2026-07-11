@@ -16,3 +16,6 @@ data/procurement/candidates/【*/
 data/procurement/raw/
 data/procurement/processed/
 data/procurement/derived/
+
+# 真实 eval golden（引用真实企业，不出库）
+evals/procurement/*.local.yaml

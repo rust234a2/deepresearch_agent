@@ -1,0 +1,12 @@
+cases:
+  - case_id: resolved_legal_name
+    question: 核验示例科技股份有限公司
+    expected_status: resolved
+    expected_code: 91330000123456789X
+  - case_id: resolved_via_alias
+    question: 核验示例设备有限公司
+    expected_status: resolved
+    expected_code: 91330000123456789X
+  - case_id: not_found
+    question: 核验不存在企业
+    expected_status: not_found
