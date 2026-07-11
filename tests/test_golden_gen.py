@@ -115,6 +115,10 @@ def test_ambiguous_case_has_both_codes(golden_repo):
     assert amb[0].expected_status == "ambiguous"
     assert amb[0].expected_candidate_codes == sorted([_code(1), _code(5)])
 
+    # 闭环校验：生成的候选集须等于 resolve_text 真实返回的候选集
+    res = golden_repo.resolve_text(amb[0].question)
+    assert sorted(c.unified_social_credit_code for c in res.candidates) == amb[0].expected_candidate_codes
+
 
 def test_not_found_questions_contain_no_db_name(golden_repo):
     cases = _generate(golden_repo)
