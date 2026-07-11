@@ -112,3 +112,32 @@ def test_neo4j_backend_matches_inmemory(tmp_path):
         assert assemble_subgraph_context(neo, seeds) == assemble_subgraph_context(mem, seeds)
     finally:
         driver.close()
+
+
+@pytest.mark.neo4j
+def test_neo4j_company_industry_and_concentration(tmp_path):
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from build_ownership_neo4j import build_industry_neo4j, build_ownership_neo4j
+
+    from deepresearch_agent.graph_retrieval import assemble_subgraph_context
+    from deepresearch_agent.neo4j_backend import Neo4jBackend
+
+    repository = _repository(tmp_path)
+    driver = _driver_or_skip()
+    try:
+        build_ownership_neo4j(repository, driver)
+        build_industry_neo4j(repository, driver)
+        neo = Neo4jBackend(driver)
+
+        # 甲乙丙 fixture 同四级行业（N3 已补），company_industry 返回小类名
+        industry = neo.company_industry(A_CODE)
+        assert industry == "金属切削机床制造"
+
+        ctx = assemble_subgraph_context(neo, [A_CODE, B_CODE, C_CODE])
+        flagged = [s for s in ctx.shared_controllers if s.concentrated_industries]
+        assert flagged, "同行业+同控制人应产出集中度线索"
+        assert all("金属切削机床制造" in s.concentrated_industries for s in flagged)
+    finally:
+        driver.close()
