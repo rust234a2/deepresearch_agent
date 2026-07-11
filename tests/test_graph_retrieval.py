@@ -94,3 +94,48 @@ def test_hybrid_search_uses_scope_seeds_sorted_by_score(tmp_path):
     assert ctx.seeds[0].score == 0.95
     shared_ids = {s.node_id for s in ctx.shared_controllers}
     assert "ext:共同控股集团有限公司" in shared_ids
+
+
+class _IndustryBackend:
+    """假后端：显式给定 industry 映射，验证集中度检测。"""
+
+    def __init__(self, graph, industries):
+        from deepresearch_agent.ownership_backend import InMemoryOwnershipBackend
+
+        self._mem = InMemoryOwnershipBackend(graph)
+        self._industries = industries
+
+    def has_node(self, node_id):
+        return self._mem.has_node(node_id)
+
+    def display_name(self, node_id):
+        return self._mem.display_name(node_id)
+
+    def ultimate_controllers(self, node_id, max_depth=5):
+        return self._mem.ultimate_controllers(node_id, max_depth=max_depth)
+
+    def direct_neighbors(self, node_id):
+        return self._mem.direct_neighbors(node_id)
+
+    def company_industry(self, node_id):
+        return self._industries.get(node_id)
+
+
+def test_shared_controller_flags_same_industry_concentration(tmp_path):
+    graph = _graph(tmp_path)
+    # 甲、丙 同行业"机床"，乙 不同 → 控制 {甲,丙} 的控制人应标记该行业
+    backend = _IndustryBackend(graph, {A_CODE: "机床制造", C_CODE: "机床制造", B_CODE: "餐饮"})
+
+    ctx = assemble_subgraph_context(backend, [A_CODE, B_CODE, C_CODE])
+
+    shared = {s.node_id: s for s in ctx.shared_controllers}
+    zhangsan = shared["person:张三"]  # 张三 控制 甲、丙（均"机床制造"）
+    assert zhangsan.concentrated_industries == ["机床制造"]
+
+
+def test_inmemory_backend_reports_no_industry_concentration(tmp_path):
+    graph = _graph(tmp_path)
+
+    ctx = assemble_subgraph_context(InMemoryOwnershipBackend(graph), [A_CODE, B_CODE, C_CODE])
+
+    assert all(s.concentrated_industries == [] for s in ctx.shared_controllers)

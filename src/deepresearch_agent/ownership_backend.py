@@ -22,6 +22,7 @@ class OwnershipGraphBackend(Protocol):
     def display_name(self, node_id: str) -> str: ...
     def ultimate_controllers(self, node_id: str, max_depth: int = 5) -> list[ControllerResult]: ...
     def direct_neighbors(self, node_id: str) -> list[NeighborEdge]: ...
+    def company_industry(self, node_id: str) -> str | None: ...
 
 
 class InMemoryOwnershipBackend:
@@ -68,3 +69,6 @@ class InMemoryOwnershipBackend:
             )
         neighbors.sort(key=lambda n: (n.direction, n.node_id))
         return neighbors
+
+    def company_industry(self, node_id: str) -> str | None:
+        return None  # 内存图无行业层（N3 只灌 Neo4j）；优雅降级，不误报集中度

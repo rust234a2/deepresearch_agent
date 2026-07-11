@@ -85,3 +85,12 @@ class Neo4jBackend:
             ]
         neighbors.sort(key=lambda n: (n.direction, n.node_id))
         return neighbors
+
+    def company_industry(self, node_id: str) -> str | None:
+        with self._driver.session() as s:
+            rec = s.run(
+                "MATCH (c:Entity {node_id: $id})-[:IN_INDUSTRY]->(i:Industry) "
+                "RETURN i.name AS name",
+                id=node_id,
+            ).single()
+        return rec["name"] if rec is not None else None

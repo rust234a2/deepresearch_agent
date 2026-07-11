@@ -19,6 +19,7 @@ class SharedController(BaseModel):
     name: str
     controlled_seeds: list[str]
     via_person: bool
+    concentrated_industries: list[str] = []
 
 
 class HybridContext(BaseModel):
@@ -55,16 +56,25 @@ def assemble_subgraph_context(
             controlled.setdefault(controller.node_id, set()).add(code)
             name, via = meta.get(controller.node_id, (controller.display_name, False))
             meta[controller.node_id] = (name, via or controller.via_person)
-    shared = [
-        SharedController(
-            node_id=nid,
-            name=meta[nid][0],
-            controlled_seeds=sorted(codes),
-            via_person=meta[nid][1],
+    shared: list[SharedController] = []
+    for nid, codes in controlled.items():
+        if len(codes) < 2:
+            continue
+        by_industry: dict[str, int] = {}
+        for code in codes:
+            industry = backend.company_industry(code)
+            if industry:
+                by_industry[industry] = by_industry.get(industry, 0) + 1
+        concentrated = sorted(name for name, n in by_industry.items() if n >= 2)
+        shared.append(
+            SharedController(
+                node_id=nid,
+                name=meta[nid][0],
+                controlled_seeds=sorted(codes),
+                via_person=meta[nid][1],
+                concentrated_industries=concentrated,
+            )
         )
-        for nid, codes in controlled.items()
-        if len(codes) >= 2
-    ]
     shared.sort(key=lambda s: (-len(s.controlled_seeds), s.node_id))
     seeds.sort(key=lambda s: (-s.score, s.code))
     return HybridContext(query=query, seeds=seeds, shared_controllers=shared)
