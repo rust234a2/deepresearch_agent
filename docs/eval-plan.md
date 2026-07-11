@@ -4,7 +4,7 @@
 
 后续评估阶段按以下顺序实施：
 
-1. ✅ **已做（部分）**：建立 golden cases——合成 golden 已提交（`evals/procurement/*.synthetic.yaml`）；真实 golden 由本地补齐（`*.local.yaml`，不出库）。受限制/资料缺失等场景 case 待接入对应数据源后再加。
+1. ✅ **已做（部分）**：建立 golden cases——合成 golden 已提交（`evals/procurement/*.synthetic.yaml`）；真实 golden 由本地补齐（`*.local.yaml`，不出库）。**起草工具已落地**（`eval/golden_gen.py` + `scripts/generate_entity_golden.py`）：读真库、按多重映射（归一化名→代码集）派生法定名/曾用名/歧义/not_found 四类企业识别题，真值取自 DB 原始事实、与 `resolve_text` 语义一致（闭环 accuracy=1.0），stdout 只回条数、真名只进 `.local.yaml`。用户本地跑脚本即得真实 P/R。受限制/资料缺失等场景 case 待接入对应数据源后再加。
 2. ✅ **已做（可测部分）**：确定性指标——企业识别 P/R + scope recall@k 已实现。推荐准确率/风险命中率/引用覆盖率待接入风险与推荐能力后再补。
 3. 使用 RAGAS 评估 RAG 检索与回答质量。**（后置；需本地 LLM，红线敏感。）**
 4. ✅ **已做（追踪部分）**：Phoenix 本地追踪已落地（`observability.py`，手动 span 在图层包四节点 + root span，`run_research(enable_tracing=True)`/CLI `--trace`）——**只做追踪/可视化,不用 LLM-eval**、仅本地、不外发企业数据。单工具/命中下钻 span、接 eval 指标进 Experiments 为后续。

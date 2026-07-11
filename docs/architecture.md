@@ -127,6 +127,6 @@ flowchart LR
 - `/research` API 端到端暴露 scope。
 - 制裁、司法、新闻、财务和采购履约独立数据源。
 - ruff + mypy 静态检查。
-- eval 扩展：真实 golden 集补齐（本地跑真实数字）、GraphRAG 精准率（人工抽检 via_person）、接入风险/推荐数据源后补对应指标；RAGAS/LLM-as-judge 待本地 LLM 就绪且确定性基线稳定后再评估。
+- eval 扩展：真实 golden 起草工具已落地（`eval/golden_gen.py` + `scripts/generate_entity_golden.py`，从真库派生法定名/曾用名/歧义/not_found 四类企业识别题，真值取自 DB 事实、闭环 accuracy=1.0，写 gitignored 的 `*.local.yaml`、只回条数）；仍待：本地跑真实 P/R 数字、GraphRAG 精准率（人工抽检 via_person）、接入风险/推荐数据源后补对应指标；RAGAS/LLM-as-judge 待本地 LLM 就绪且确定性基线稳定后再评估。
 - Phoenix 本地追踪已落地（`observability.py`，手动 span 在图层包四节点 + root span，`run_research(enable_tracing=True)`/CLI `--trace`，`.[trace]` extra；默认关、仅本地、不接 LLM-eval）。后续可补：单工具/单命中下钻 span、把 eval 指标接进 Phoenix Experiments。
 - GraphRAG、MCP、Qdrant 和持久化 checkpoint。
