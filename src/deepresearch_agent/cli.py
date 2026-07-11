@@ -35,6 +35,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="启用 GraphRAG 能力检索：候选 + 最终控制人 + 共享控制人（围标线索）。",
     )
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="启用本地 Phoenix 链路追踪（需本地 pip install arize-phoenix 并 phoenix serve）。",
+    )
     args = parser.parse_args(argv)
 
     state = run_research(
@@ -43,6 +48,7 @@ def main(argv: list[str] | None = None) -> None:
         index_path=args.index,
         enable_scope=True,
         enable_graph=args.graph,
+        enable_tracing=args.trace,
     )
 
     console = Console()

@@ -8,7 +8,6 @@ def configure_tracing(exporter=None, endpoint: str = "http://localhost:6006/v1/t
     global _PROVIDER
     if _PROVIDER is not None:
         return _PROVIDER
-    from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 
@@ -18,18 +17,16 @@ def configure_tracing(exporter=None, endpoint: str = "http://localhost:6006/v1/t
 
         exporter = OTLPSpanExporter(endpoint=endpoint)  # 仅本地 Phoenix，绝不指远程
     provider.add_span_processor(SimpleSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
+    # 不走 OTel 全局 set_tracer_provider（进程内只可设一次、无法重置）；直接持有 provider。
     _PROVIDER = provider
     return provider
 
 
 def get_tracer():
-    """未配置 → None（调用方据此透传、零开销、也不导入 otel）。"""
+    """未配置 → None（调用方据此透传、零开销、也不导入 otel）。从本模块持有的 provider 取，避免全局单例冲突。"""
     if _PROVIDER is None:
         return None
-    from opentelemetry import trace
-
-    return trace.get_tracer("deepresearch_agent")
+    return _PROVIDER.get_tracer("deepresearch_agent")
 
 
 def reset_tracing() -> None:

@@ -1,3 +1,5 @@
+import pytest
+
 from deepresearch_agent.cli import main
 
 
@@ -69,3 +71,27 @@ def test_cli_question_path_still_works(company_database_path, tmp_path, capsys):
     )
     out = capsys.readouterr().out
     assert "示例科技股份有限公司" in out
+
+
+def test_cli_trace_flag_parses_and_runs(company_database_path, tmp_path, capsys):
+    pytest.importorskip("opentelemetry")
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    from deepresearch_agent.observability import configure_tracing, reset_tracing
+
+    reset_tracing()
+    configure_tracing(exporter=InMemorySpanExporter())  # 幂等：main 内 configure 不覆盖，避免碰 OTLP 网络
+    try:
+        main(
+            [
+                "核验示例科技股份有限公司",
+                "--database", str(company_database_path),
+                "--index", str(tmp_path / "missing.faiss"),
+                "--trace",
+            ]
+        )
+    finally:
+        reset_tracing()
+    out = capsys.readouterr().out
+    assert "示例科技股份有限公司" in out
+    assert "insufficient_evidence" in out
