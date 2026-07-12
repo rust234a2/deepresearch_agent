@@ -15,6 +15,9 @@ def main(argv: list[str] | None = None) -> None:
     if raw and raw[0] == "eval":
         _eval_main(raw[1:])
         return
+    if raw and raw[0] == "chat":
+        _chat_main(raw[1:])
+        return
     parser = argparse.ArgumentParser(description="Run a procurement DeepResearch supplier assessment.")
     parser.add_argument(
         "question",
@@ -161,6 +164,70 @@ def _eval_main(argv: list[str]) -> None:
             f"  cases={m.total}  mean_recall_at_k={m.mean_recall_at_k:.2f}  "
             f"mean_precision_at_k={m.mean_precision_at_k:.2f}"
         )
+
+
+def run_chat_loop(session, memory, read_line, emit, run_turn) -> None:
+    while True:
+        line = read_line()
+        if line is None:
+            break
+        line = line.strip()
+        if line in ("exit", "quit", ""):
+            break
+        emit(run_turn(line, session, memory))
+
+
+def _print_any_report(console: Console, state) -> None:
+    if state.graph_report is not None:
+        _print_graph_report(console, state.graph_report)
+    elif state.scope_report is not None:
+        _print_scope_report(console, state.scope_report)
+    elif state.report is not None:
+        _print_supplier_report(console, state.report)
+
+
+def _chat_main(argv: list[str]) -> None:
+    from deepresearch_agent.memory.config import build_memory_backend
+    from deepresearch_agent.memory.service import MemoryService
+    from deepresearch_agent.memory.session import Session
+
+    parser = argparse.ArgumentParser(prog="cli chat", description="交互式多轮供应商核验对话。")
+    parser.add_argument("--user", default="default")
+    parser.add_argument("--session", default="cli")
+    parser.add_argument("--database", default="data/procurement/derived/companies.sqlite3")
+    parser.add_argument("--index", default="data/procurement/derived/scope_index.faiss")
+    args = parser.parse_args(argv)
+
+    session = Session(user_id=args.user, session_id=args.session)
+    memory = MemoryService(build_memory_backend())
+    console = Console()
+    console.print(f"[bold]对话开始[/bold]（输入 exit 退出）。记忆可用：{memory.memory_available}")
+
+    def run_turn(line, s, m):
+        return run_research(
+            line,
+            database_path=args.database,
+            index_path=args.index,
+            enable_scope=True,
+            session=s,
+            memory=m,
+            enable_memory=True,
+        )
+
+    run_chat_loop(
+        session,
+        memory,
+        lambda: _read_input(console),
+        lambda st: _print_any_report(console, st),
+        run_turn,
+    )
+
+
+def _read_input(console: Console) -> str | None:
+    try:
+        return input("> ")
+    except EOFError:
+        return None
 
 
 if __name__ == "__main__":
