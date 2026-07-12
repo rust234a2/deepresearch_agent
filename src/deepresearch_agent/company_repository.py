@@ -117,6 +117,9 @@ class CompanyRepository:
                 matches[code] = candidate
 
         if not matches:
+            matches = _partial_name_matches(normalized_text, legal_names, aliases)
+
+        if not matches:
             return CompanyResolution(status="not_found")
 
         matches = _drop_dominated_matches(matches)
@@ -352,6 +355,82 @@ def _drop_dominated_matches(
             continue
         kept[code] = value
     return kept
+
+
+_COMPANY_SUFFIXES = (
+    "股份有限公司",
+    "有限责任公司",
+    "集团有限公司",
+    "有限公司",
+    "股份公司",
+    "公司",
+)
+
+
+def _partial_name_matches(
+    normalized_text: str,
+    legal_names: list[sqlite3.Row],
+    aliases: list[sqlite3.Row],
+) -> dict[str, tuple[str, str, str]]:
+    """Find companies by a distinctive fragment when no full name is present."""
+    matches: dict[str, tuple[str, str, str]] = {}
+    scores: dict[str, int] = {}
+    for row, match_type in [
+        *((row, "legal_name") for row in legal_names),
+        *((row, "alias") for row in aliases),
+    ]:
+        matched_text = row["matched_text"]
+        score = _partial_name_score(normalized_text, normalize_company_name(matched_text))
+        if score == 0:
+            continue
+        code = row["unified_social_credit_code"]
+        candidate = (row["legal_name"], matched_text, match_type)
+        current = matches.get(code)
+        if (
+            current is None
+            or score > scores[code]
+            or (score == scores[code] and _match_rank(candidate) > _match_rank(current))
+        ):
+            matches[code] = candidate
+            scores[code] = score
+    if not scores:
+        return {}
+    best_score = max(scores.values())
+    return {code: match for code, match in matches.items() if scores[code] == best_score}
+
+
+def _partial_name_score(normalized_text: str, normalized_candidate: str) -> int:
+    normalized_text = _remove_company_designators(normalized_text)
+    stem = _remove_company_suffix(normalized_candidate)
+    if len(stem) >= 4 and stem in normalized_text:
+        return len(stem)
+
+    best_chinese_fragment = 0
+    for length in range(min(len(stem), 12), 3, -1):
+        if any(stem[start : start + length] in normalized_text for start in range(len(stem) - length + 1)):
+            best_chinese_fragment = length
+            break
+
+    ascii_fragments = re.findall(r"[a-z0-9]{3,}", stem)
+    best_ascii_fragment = max(
+        (len(fragment) for fragment in ascii_fragments if fragment in normalized_text),
+        default=0,
+    )
+    return max(best_chinese_fragment, best_ascii_fragment)
+
+
+def _remove_company_suffix(normalized_name: str) -> str:
+    for suffix in _COMPANY_SUFFIXES:
+        if normalized_name.endswith(suffix):
+            return normalized_name[: -len(suffix)]
+    return normalized_name
+
+
+def _remove_company_designators(normalized_text: str) -> str:
+    result = normalized_text
+    for suffix in _COMPANY_SUFFIXES:
+        result = result.replace(suffix, "")
+    return result
 
 
 def _graph_node_from_row(row: sqlite3.Row) -> GraphNode:

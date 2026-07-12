@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from deepresearch_agent.company_data_cleaning import CORE_COLUMNS
+from deepresearch_agent.company_data_cleaning import CONTACT_COLUMNS, CORE_COLUMNS
 from deepresearch_agent.company_database import build_company_database
 from deepresearch_agent.company_repository import CompanyRepository
 
@@ -127,6 +127,72 @@ def test_repository_prefers_more_specific_name_over_substring(tmp_path):
     assert result.status == "resolved"
     assert result.legal_name == "示例科技股份有限公司"
     assert result.unified_social_credit_code == "91330000123456789X"
+
+
+def test_repository_resolves_unique_partial_company_name(tmp_path):
+    with (FIXTURES / "companies.csv").open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    rows[0]["legal_name"] = "TCL中环新能源科技股份有限公司"
+    rows[0]["aliases"] = ""
+    companies_path = tmp_path / "companies.csv"
+    with companies_path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CORE_COLUMNS)
+        writer.writeheader()
+        writer.writerow(rows[0])
+    with (FIXTURES / "contacts.csv").open(encoding="utf-8-sig", newline="") as handle:
+        contacts = list(csv.DictReader(handle))
+    contacts[0]["legal_name"] = rows[0]["legal_name"]
+    contacts_path = tmp_path / "contacts.csv"
+    with contacts_path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CONTACT_COLUMNS)
+        writer.writeheader()
+        writer.writerow(contacts[0])
+    database_path = tmp_path / "companies.sqlite3"
+    build_company_database(companies_path, contacts_path, database_path)
+
+    result = CompanyRepository(database_path).resolve_text("核验TCL中环有限公司的工商信息")
+
+    assert result.status == "resolved"
+    assert result.legal_name == "TCL中环新能源科技股份有限公司"
+
+
+def test_repository_returns_candidates_for_shared_partial_company_name(tmp_path):
+    with (FIXTURES / "companies.csv").open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    first = dict(rows[0])
+    first["legal_name"] = "TCL中环新能源科技股份有限公司"
+    first["aliases"] = ""
+    second = dict(rows[0])
+    second["legal_name"] = "TCL科技集团股份有限公司"
+    second["aliases"] = ""
+    second["unified_social_credit_code"] = "911100001111111111"
+    companies_path = tmp_path / "companies.csv"
+    with companies_path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CORE_COLUMNS)
+        writer.writeheader()
+        writer.writerows([first, second])
+    with (FIXTURES / "contacts.csv").open(encoding="utf-8-sig", newline="") as handle:
+        contacts = list(csv.DictReader(handle))
+    first_contact = dict(contacts[0])
+    first_contact["legal_name"] = first["legal_name"]
+    second_contact = dict(contacts[0])
+    second_contact["unified_social_credit_code"] = second["unified_social_credit_code"]
+    second_contact["legal_name"] = second["legal_name"]
+    contacts_path = tmp_path / "contacts.csv"
+    with contacts_path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CONTACT_COLUMNS)
+        writer.writeheader()
+        writer.writerows([first_contact, second_contact])
+    database_path = tmp_path / "companies.sqlite3"
+    build_company_database(companies_path, contacts_path, database_path)
+
+    result = CompanyRepository(database_path).resolve_text("核验TCL有限公司的工商信息")
+
+    assert result.status == "ambiguous"
+    assert [item.legal_name for item in result.candidates] == [
+        "TCL中环新能源科技股份有限公司",
+        "TCL科技集团股份有限公司",
+    ]
 
 
 def test_repository_returns_scope_chunks_by_id(tmp_path):

@@ -643,13 +643,13 @@ def _write_unresolved_supplier_report(state: ResearchState) -> ResearchState:
     resolution = state.supplier_resolution
     if resolution is not None and resolution.status == "ambiguous":
         candidates = "、".join(item.legal_name for item in resolution.candidates)
-        summary = f"匹配到多家企业：{candidates}。必须指定单一企业。"
+        summary = f"根据当前名称线索匹配到多家企业：{candidates}。请指定其中一家后再继续核验。"
         question = f"请从以下企业中指定一家：{candidates}。"
     else:
         summary = "未能从本地企业数据库识别供应商。"
         question = "请提供数据库中存在的企业法定名称或曾用名。"
     state.report = SupplierReport(
-        supplier_name="Unknown supplier",
+        supplier_name="待确认企业" if resolution is not None and resolution.status == "ambiguous" else "未识别企业",
         recommendation="insufficient_evidence",
         summary=summary,
         risks=["企业身份未解析，未启动工商核验。"],
