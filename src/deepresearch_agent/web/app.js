@@ -163,9 +163,29 @@
 
   function createStreamingMessage() {
     const bubble = el("div", "bubble-assistant");
+    let hasContent = false;
+    const sections = new Set();
+    function appendText(text) {
+      bubble.textContent += text;
+      hasContent = hasContent || Boolean(text);
+    }
     return {
       node: bubble,
-      append(text) { bubble.textContent += text; },
+      hasContent() { return hasContent; },
+      append(event, data) {
+        if (event === "message_delta" || event === "summary_delta") {
+          appendText(data.text);
+        } else if (event === "risk") {
+          if (!sections.has("risk")) { appendText("\n\n提示："); sections.add("risk"); }
+          appendText("\n- " + data.text);
+        } else if (event === "evidence") {
+          if (!sections.has("evidence")) { appendText("\n\n本地证据："); sections.add("evidence"); }
+          appendText("\n- [" + (data.dimension || "证据") + "] " + (data.claim || ""));
+        } else if (event === "open_question") {
+          if (!sections.has("question")) { appendText("\n\n仍需核验："); sections.add("question"); }
+          appendText("\n- " + data.text);
+        }
+      },
     };
   }
 
@@ -263,9 +283,11 @@
           thinking.remove();
           streamed = createStreamingMessage();
           appendAssistant(streamed.node);
-        } else if (event === "message_delta" && streamed) {
-          streamed.append(data.text);
+        } else if (streamed && event !== "complete") {
+          streamed.append(event, data);
           await new Promise(requestAnimationFrame);
+        } else if (event === "complete" && streamed && !streamed.hasContent()) {
+          streamed.append("服务端未返回可显示的正文。请重启本地 Uvicorn 服务后重试。");
         }
         scrollDown();
       });
