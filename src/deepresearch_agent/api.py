@@ -157,7 +157,7 @@ def create_app(
                     "supplier_name": report["supplier_name"],
                     "recommendation": report["recommendation"],
                 })
-                for text in _report_message_chunks(report):
+                for text in _report_message_chunks(report, "named"):
                     yield _sse("message_delta", {"text": text})
                 yield _sse("complete", {"session_id": session.session_id})
 
@@ -182,17 +182,41 @@ def _text_chunks(text: str, size: int = 18):
         yield text[start : start + size]
 
 
-def _report_message_chunks(report: dict):
-    recommendation = {
-        "insufficient_evidence": "证据不足，不能据此作出采购批准或风险结论。",
-        "conditional": "存在前提条件，须人工复核。",
-        "approve": "通过。",
-        "reject": "不通过。",
-    }.get(report["recommendation"], report["recommendation"])
-    sections = [
-        f"{report['supplier_name']}\n\n结论：{recommendation}",
-        report.get("summary", ""),
-    ]
+def _resolve_report(state) -> tuple[str, dict]:
+    mode = state.retrieval_mode or "named"
+    report = {"scope": state.scope_report, "graph": state.graph_report}.get(mode) or state.report
+    if report is None:
+        raise RuntimeError("turn completed without any report")
+    return mode, report.model_dump(mode="json")
+
+
+_RECOMMENDATION_TEXT = {
+    "insufficient_evidence": "证据不足，不能据此作出采购批准或风险结论。",
+    "conditional": "存在前提条件，须人工复核。",
+    "approve": "通过。",
+    "reject": "不通过。",
+}
+
+
+def _report_message_chunks(report: dict, report_type: str):
+    rec = _RECOMMENDATION_TEXT.get(report["recommendation"], report["recommendation"])
+    if report_type in ("named", "unresolved"):
+        sections = [f"{report['supplier_name']}\n\n结论：{rec}", report.get("summary", "")]
+    elif report_type == "scope":
+        head = f"经营范围语义检索：{report['query']}\n\n结论：{rec}"
+        lines = [f"· {c['legal_name']}（{c['top_score']:.2f}）" for c in report.get("candidates", [])]
+        sections = [head, report.get("summary", ""), "候选企业：\n" + "\n".join(lines) if lines else ""]
+    else:  # graph
+        head = f"股权关系检索：{report['query']}\n\n结论：{rec}"
+        cand = [f"· {c['legal_name']}｜最终控制人：{'、'.join(c.get('ultimate_controllers') or []) or '—'}"
+                for c in report.get("candidates", [])]
+        clue = [f"· {s['controller_name']} → {'、'.join(s.get('controlled_companies') or [])}（{s['note']}）"
+                for s in report.get("shared_controllers", [])]
+        sections = [
+            head, report.get("summary", ""),
+            "候选企业：\n" + "\n".join(cand) if cand else "",
+            "围标线索（线索级·须人工复核）：\n" + "\n".join(clue) if clue else "",
+        ]
     for section in sections:
         if section:
             yield from _text_chunks(f"\n\n{section}")
