@@ -161,29 +161,11 @@
     return card;
   }
 
-  function createStreamingReport(head) {
-    const report = {
-      supplier_name: head.supplier_name,
-      recommendation: head.recommendation,
-      credit_code: head.credit_code || "",
-      summary: "",
-      risks: [],
-      evidence_table: [],
-      open_questions: [],
-    };
-    let card = renderReport(report);
+  function createStreamingMessage() {
+    const bubble = el("div", "bubble-assistant");
     return {
-      get node() { return card; },
-      append(event, data) {
-        if (event === "summary_delta") report.summary += data.text;
-        else if (event === "risk") report.risks.push(data.text);
-        else if (event === "evidence") report.evidence_table.push(data);
-        else if (event === "open_question") report.open_questions.push(data.text);
-        else return;
-        const next = renderReport(report);
-        card.replaceWith(next);
-        card = next;
-      },
+      node: bubble,
+      append(text) { bubble.textContent += text; },
     };
   }
 
@@ -279,10 +261,10 @@
         else if (event === "progress") thinking.lastChild.textContent = data.message;
         else if (event === "report_start") {
           thinking.remove();
-          streamed = createStreamingReport(data);
+          streamed = createStreamingMessage();
           appendAssistant(streamed.node);
-        } else if (streamed) {
-          streamed.append(event, data);
+        } else if (event === "message_delta" && streamed) {
+          streamed.append(data.text);
           await new Promise(requestAnimationFrame);
         }
         scrollDown();

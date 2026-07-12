@@ -64,6 +64,7 @@ header.bar { position: sticky; top: 0; z-index: 20; display: flex; align-items: 
 .avatar.a { background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--line); }
 .avatar.u { background: var(--accent); color: #fff; }
 .bubble-user { max-width: 76%; background: var(--accent); color: #fff; padding: 10px 14px; border-radius: 14px 14px 4px 14px; font-size: 14.5px; box-shadow: var(--shadow); overflow-wrap: anywhere; }
+.bubble-assistant { max-width: min(100%, 720px); padding: 2px 0; color: var(--fg-soft); font-size: 14.5px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* 报告卡 */
 .card { max-width: 100%; flex: 1 1 auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }

@@ -156,16 +156,9 @@ def create_app(
                 yield _sse("report_start", {
                     "supplier_name": report["supplier_name"],
                     "recommendation": report["recommendation"],
-                    "credit_code": _report_credit_code(report),
                 })
-                for text in _text_chunks(report["summary"]):
-                    yield _sse("summary_delta", {"text": text})
-                for risk in report["risks"]:
-                    yield _sse("risk", {"text": risk})
-                for evidence in report["evidence_table"]:
-                    yield _sse("evidence", evidence)
-                for question in report["open_questions"]:
-                    yield _sse("open_question", {"text": question})
+                for text in _report_message_chunks(report):
+                    yield _sse("message_delta", {"text": text})
                 yield _sse("complete", {"session_id": session.session_id})
 
         return StreamingResponse(
@@ -183,18 +176,37 @@ def create_app(
     return application
 
 
-def _report_credit_code(report: dict) -> str:
-    for evidence in report.get("evidence_table", []):
-        source_id = (evidence.get("citation") or {}).get("source_id", "")
-        if len(source_id) == 18:
-            return source_id
-    return ""
-
-
 def _text_chunks(text: str, size: int = 18):
     """Split report prose into small SSE deltas for a chat-like reveal."""
     for start in range(0, len(text), size):
         yield text[start : start + size]
+
+
+def _report_message_chunks(report: dict):
+    recommendation = {
+        "insufficient_evidence": "证据不足，不能据此作出采购批准或风险结论。",
+        "conditional": "存在前提条件，须人工复核。",
+        "approve": "通过。",
+        "reject": "不通过。",
+    }.get(report["recommendation"], report["recommendation"])
+    sections = [
+        f"{report['supplier_name']}\n\n结论：{recommendation}",
+        report.get("summary", ""),
+    ]
+    if report.get("risks"):
+        sections.append("提示：\n" + "\n".join(f"- {item}" for item in report["risks"]))
+    if report.get("evidence_table"):
+        evidence = "\n".join(
+            f"- [{item['dimension']}] {item['claim']}"
+            for item in report["evidence_table"]
+        )
+        sections.append(f"本地证据：\n{evidence}")
+    if report.get("open_questions"):
+        questions = "\n".join(f"- {item}" for item in report["open_questions"])
+        sections.append(f"仍需核验：\n{questions}")
+    for section in sections:
+        if section:
+            yield from _text_chunks(f"\n\n{section}")
 
 
 app = create_app()
