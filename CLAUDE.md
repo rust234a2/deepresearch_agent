@@ -63,6 +63,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # API（无状态：POST /research {"question","domain"}；有状态多轮：POST /session/turn {"question","user_id","session_id"?,"domain"?}→{"session_id","report"}）
 .\.conda-env\python.exe -m uvicorn deepresearch_agent.api:app --reload
+# 起服务后浏览器开 http://127.0.0.1:8000/ 即为对外演示聊天界面（自包含 vanilla 页：GET / + /static，多轮指代/加载态/结构化报告卡）
 
 # Eval v1 确定性评测（企业识别 P/R = 零下载 CI 核心；scope recall@k 需 bge、标 slow）
 .\.conda-env\python.exe -m deepresearch_agent.cli eval entity `

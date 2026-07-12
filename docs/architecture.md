@@ -130,6 +130,7 @@ flowchart LR
 - FastAPI 通过 `create_app(database_path, memory=, session_store=)` 注入数据库/记忆/会话存储，启动时按领域缓存编译图；模块级 `app` 使用默认路径。
 - API 响应继续使用 `SupplierReport`，保持现有外形（`enable_scope` 默认关，不暴露 scope）。
 - `POST /session/turn` 为有状态多轮端点：请求体 `user_id` 作 authenticated user（无鉴权层 stand-in），`session_id` 只寻址不授权；响应 `{session_id, report}`。
+- **Web 聊天界面**（对外演示 Demo）：`GET /` 返 `web/index.html`、`/static` 挂 `StaticFiles` 托管 `web/{index.html,style.css,app.js}`；自包含 vanilla 页（零构建零 npm、无 CDN），发 `POST /session/turn` 后以「研究中…」加载态→结构化报告卡渲染 `SupplierReport`（recommendation 徽章四值映射、证据表带 `local://` 引用、待解问题=尚未接入数据源）；身份 `user_id` 存 localStorage、`session_id` 内存复用多轮指代。后端仅新增静态托管（`WEB_DIR=Path(__file__).parent/"web"`），端点逻辑不变。
 
 ## 后续能力
 
