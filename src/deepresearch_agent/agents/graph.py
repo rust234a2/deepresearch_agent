@@ -104,8 +104,10 @@ def build_graph(
     return graph.compile()
 
 
-def run_compiled(compiled_graph, question: str, domain: str) -> ResearchState:
-    result = compiled_graph.invoke(ResearchState(question=question, domain=domain))
+def run_compiled(compiled_graph, question: str, domain: str, preresolved=None) -> ResearchState:
+    result = compiled_graph.invoke(
+        ResearchState(question=question, domain=domain, preresolved=preresolved)
+    )
     if isinstance(result, ResearchState):
         return result
     return ResearchState.model_validate(result)
@@ -119,6 +121,9 @@ def run_research(
     enable_scope: bool = False,
     enable_graph: bool = False,
     enable_tracing: bool = False,
+    session=None,
+    memory=None,
+    enable_memory: bool = False,
 ) -> ResearchState:
     domain_pack = load_domain_pack(Path("domains") / domain / "domain.yaml")
     repository = CompanyRepository(database_path)
@@ -142,13 +147,37 @@ def run_research(
         graph_enabled=enable_graph,
         enable_tracing=enable_tracing,
     )
+
+    preresolved = None
+    memory_lines: list[str] = []
+    if enable_memory and session is not None:
+        preresolved = session.resolve_anaphora(question)
+        if memory is not None:
+            memory_lines = memory.recall(session.user_id, question)
+
     tracer = get_tracer() if enable_tracing else None
     if tracer is not None:
         with tracer.start_as_current_span("research") as span:
             span.set_attribute("question", question)
             span.set_attribute("domain", domain)
-            return run_compiled(app, question, domain)
-    return run_compiled(app, question, domain)
+            state = run_compiled(app, question, domain, preresolved=preresolved)
+    else:
+        state = run_compiled(app, question, domain, preresolved=preresolved)
+
+    if enable_memory and session is not None:
+        if state.supplier_resolution is not None:
+            session.note_entity(state.supplier_resolution)
+        if memory is not None:
+            memory.remember(
+                session.user_id,
+                [
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": _report_summary(state)},
+                ],
+            )
+    if memory_lines:
+        _surface_memory(state, memory_lines)
+    return state
 
 
 def _build_scope_retriever(database_path: str | Path, index_path: str | Path):
@@ -183,3 +212,23 @@ def _build_llm():
         return build_deepseek_classifier()
     except Exception:
         return None
+
+
+def _report_of(state: ResearchState):
+    for report in (state.report, state.scope_report, state.graph_report):
+        if report is not None:
+            return report
+    return None
+
+
+def _report_summary(state: ResearchState) -> str:
+    report = _report_of(state)
+    return report.summary if report is not None else ""
+
+
+def _surface_memory(state: ResearchState, lines: list[str]) -> None:
+    report = _report_of(state)
+    if report is None or not lines:
+        return
+    note = [f"结合历史记忆（供参考，非本轮新事实）：{line}" for line in lines]
+    report.open_questions = note + list(report.open_questions)

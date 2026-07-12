@@ -94,6 +94,7 @@ class ResearchState(BaseModel):
     supplier_name: str | None = None
     company_credit_code: str | None = None
     supplier_resolution: CompanyResolution | None = None
+    preresolved: CompanyResolution | None = None
     iteration: int = 0
     max_iterations: int = 3
     plan: list[ResearchPlanItem] = Field(default_factory=list)

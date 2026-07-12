@@ -47,6 +47,8 @@ def planner_node(
     llm=None,
 ) -> ResearchState:
     resolution = resolve_supplier(state.question, repository)
+    if resolution.status == "not_found" and state.preresolved is not None:
+        resolution = state.preresolved
     state.supplier_resolution = resolution
     state.supplier_name = resolution.legal_name
     state.company_credit_code = resolution.unified_social_credit_code
