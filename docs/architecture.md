@@ -113,9 +113,18 @@ flowchart LR
 - SQLite 是事实源（含 chunk 文本与向量），`scope_index.faiss` 是可重建派生索引。
 - `run_research(enable_scope=True)` 时懒加载 `rag` 并把 retriever 注入 researcher（不再是独立节点）；缺 `.[rag]`/索引/模型则由 writer 降级为“不可用”报告，主图 import 不依赖 faiss/torch。
 
+## 记忆层（`memory/`）
+
+两层记忆，经 `run_research(session=, memory=, enable_memory=)` 与 `cli chat` 接入，默认关、`/research` API 不动。
+
+- **会话最近实体缓冲**（`session.py`，确定性、零 LLM）：`Session.recent_entities` 存最近 resolved 实体；`resolve_anaphora` 在句含 `它/该公司/上述` 等标记时返回最近实体。planner 仅在直接解析 `not_found` 时回退该实体（`state.preresolved`）。
+- **mem0 语义记忆**（`service.py`/`config.py`，跨会话）：`MemoryService.recall/remember` 包 mem0；抽取走云端 DeepSeek（`MemoryConfig.deepseek`，OpenAI 兼容），嵌入用本地 bge，向量库本地 Chroma。缺依赖/缺 key/异常 → `memory_available=False` 或 no-op 降级。
+- **数据流（一轮）**：指代解析→`preresolved`；`recall`→注入报告 `open_questions`（标注「历史记忆」）；跑图；`note_entity`；`remember(问题+报告摘要)`。
+- **红线**：本线经用户决定豁免数据本地化、抽取走云端；本地 Ollama 接口保留（一段 config 可切回）。CI 零网络用 FakeMemoryBackend，真链路 `@pytest.mark.llm` 手验。
+
 ## 接口
 
-- CLI 支持 `--database` / `--index`；默认 `enable_scope=True`，按问题类型自动分流（指名企业→核验，能力描述→scope 检索）。
+- CLI 支持 `--database` / `--index`；默认 `enable_scope=True`，按问题类型自动分流（指名企业→核验，能力描述→scope 检索）。`cli chat` 子命令承载多轮对话。
 - 独立 `rag.cli` 直接暴露 `ScopeRetriever`（不经 Agent 编排）。
 - FastAPI 通过 `create_app(database_path)` 注入数据库，启动时按领域缓存编译图；模块级 `app` 使用默认路径。
 - API 响应继续使用 `SupplierReport`，保持现有外形（`enable_scope` 默认关，不暴露 scope）。
