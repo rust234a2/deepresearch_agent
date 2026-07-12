@@ -34,6 +34,10 @@ trace = [
   "opentelemetry-sdk>=1.20",
   "opentelemetry-exporter-otlp-proto-http>=1.20",
 ]
+memory = [
+  "mem0ai>=0.1",
+  "chromadb>=0.5",
+]
 
 [project.scripts]
 deepresearch = "deepresearch_agent.cli:main"
@@ -48,8 +52,9 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-addopts = "-q -m 'not slow and not neo4j'"
+addopts = "-q -m 'not slow and not neo4j and not llm'"
 markers = [
   "slow: 需要重型 ML 依赖或模型下载，默认排除",
   "neo4j: 需要本地 Neo4j（docker compose up）的对拍测试，默认排除",
+  "llm: 需要外部 LLM（DeepSeek）与 mem0/chromadb 的真链路测试，默认排除",
 ]
