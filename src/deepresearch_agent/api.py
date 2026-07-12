@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, StringConstraints
 
 from deepresearch_agent.agents import graph as graph_module
@@ -25,6 +27,8 @@ from deepresearch_agent.state import SupplierReport
 Question = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 DEFAULT_SESSIONS_DIR = Path("data/procurement/sessions")
+
+WEB_DIR = Path(__file__).parent / "web"
 
 
 class ResearchRequest(BaseModel):
@@ -94,6 +98,12 @@ def create_app(
         if state.report is None:
             raise RuntimeError("session turn completed without a report")
         return SessionTurnResponse(session_id=session.session_id, report=state.report)
+
+    application.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+
+    @application.get("/", include_in_schema=False)
+    def index() -> FileResponse:
+        return FileResponse(WEB_DIR / "index.html")
 
     return application
 
