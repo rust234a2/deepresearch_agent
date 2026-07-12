@@ -113,6 +113,46 @@ def run_compiled(compiled_graph, question: str, domain: str, preresolved=None) -
     return ResearchState.model_validate(result)
 
 
+def execute_turn(
+    app,
+    question: str,
+    domain: str,
+    session=None,
+    memory=None,
+    enable_memory: bool = False,
+    tracer=None,
+) -> ResearchState:
+    preresolved = None
+    memory_lines: list[str] = []
+    if enable_memory and session is not None:
+        preresolved = session.resolve_anaphora(question)
+        if memory is not None:
+            memory_lines = memory.recall(session.user_id, question)
+
+    if tracer is not None:
+        with tracer.start_as_current_span("research") as span:
+            span.set_attribute("question", question)
+            span.set_attribute("domain", domain)
+            state = run_compiled(app, question, domain, preresolved=preresolved)
+    else:
+        state = run_compiled(app, question, domain, preresolved=preresolved)
+
+    if enable_memory and session is not None:
+        if state.supplier_resolution is not None:
+            session.note_entity(state.supplier_resolution)
+        if memory is not None:
+            memory.remember(
+                session.user_id,
+                [
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": _report_summary(state)},
+                ],
+            )
+    if memory_lines:
+        _surface_memory(state, memory_lines)
+    return state
+
+
 def run_research(
     question: str,
     domain: str = "procurement",
@@ -148,36 +188,16 @@ def run_research(
         enable_tracing=enable_tracing,
     )
 
-    preresolved = None
-    memory_lines: list[str] = []
-    if enable_memory and session is not None:
-        preresolved = session.resolve_anaphora(question)
-        if memory is not None:
-            memory_lines = memory.recall(session.user_id, question)
-
     tracer = get_tracer() if enable_tracing else None
-    if tracer is not None:
-        with tracer.start_as_current_span("research") as span:
-            span.set_attribute("question", question)
-            span.set_attribute("domain", domain)
-            state = run_compiled(app, question, domain, preresolved=preresolved)
-    else:
-        state = run_compiled(app, question, domain, preresolved=preresolved)
-
-    if enable_memory and session is not None:
-        if state.supplier_resolution is not None:
-            session.note_entity(state.supplier_resolution)
-        if memory is not None:
-            memory.remember(
-                session.user_id,
-                [
-                    {"role": "user", "content": question},
-                    {"role": "assistant", "content": _report_summary(state)},
-                ],
-            )
-    if memory_lines:
-        _surface_memory(state, memory_lines)
-    return state
+    return execute_turn(
+        app,
+        question,
+        domain,
+        session=session,
+        memory=memory,
+        enable_memory=enable_memory,
+        tracer=tracer,
+    )
 
 
 def _build_scope_retriever(database_path: str | Path, index_path: str | Path):
