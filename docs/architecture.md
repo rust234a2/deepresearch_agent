@@ -121,13 +121,15 @@ flowchart LR
 - **mem0 语义记忆**（`service.py`/`config.py`，跨会话）：`MemoryService.recall/remember` 包 mem0；抽取走云端 DeepSeek（`MemoryConfig.deepseek`，OpenAI 兼容），嵌入用本地 bge，向量库本地 Chroma。缺依赖/缺 key/异常 → `memory_available=False` 或 no-op 降级。
 - **数据流（一轮）**：指代解析→`preresolved`；`recall`→注入报告 `open_questions`（标注「历史记忆」）；跑图；`note_entity`；`remember(问题+报告摘要)`。
 - **红线**：本线经用户决定豁免数据本地化、抽取走云端；本地 Ollama 接口保留（一段 config 可切回）。CI 零网络用 FakeMemoryBackend，真链路 `@pytest.mark.llm` 手验。
+- **API 接入**：`POST /session/turn`（有状态多轮）经 `create_app` 注入 `MemoryService` 与 `JsonSessionStore`（`store.py`，JSON 文件每会话、原子写、跨进程）。授权靠 ownership（存储 owner≠请求 user_id→404，防 IDOR），session_id 严格 `^[A-Za-z0-9_-]{1,64}$` 防路径穿越，`uuid4` 缺省生成并始终回传。记忆编排由 `execute_turn`（`run_research` 与 API 共用）承担。`/research` 无状态一问一答不变。
 
 ## 接口
 
 - CLI 支持 `--database` / `--index`；默认 `enable_scope=True`，按问题类型自动分流（指名企业→核验，能力描述→scope 检索）。`cli chat` 子命令承载多轮对话。
 - 独立 `rag.cli` 直接暴露 `ScopeRetriever`（不经 Agent 编排）。
-- FastAPI 通过 `create_app(database_path)` 注入数据库，启动时按领域缓存编译图；模块级 `app` 使用默认路径。
+- FastAPI 通过 `create_app(database_path, memory=, session_store=)` 注入数据库/记忆/会话存储，启动时按领域缓存编译图；模块级 `app` 使用默认路径。
 - API 响应继续使用 `SupplierReport`，保持现有外形（`enable_scope` 默认关，不暴露 scope）。
+- `POST /session/turn` 为有状态多轮端点：请求体 `user_id` 作 authenticated user（无鉴权层 stand-in），`session_id` 只寻址不授权；响应 `{session_id, report}`。
 
 ## 后续能力
 
