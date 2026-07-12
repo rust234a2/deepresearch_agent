@@ -116,7 +116,7 @@
     const head = el("div", "card-head");
     const title = el("div", "title");
     title.appendChild(el("h3", null, report.supplier_name || "解析结果"));
-    const code = deriveCode(report);
+    const code = report.credit_code || deriveCode(report);
     if (code) title.appendChild(el("div", "code", code));
     head.appendChild(title);
     head.appendChild(renderBadge(report.recommendation));
@@ -159,6 +159,32 @@
       card.appendChild(sec);
     }
     return card;
+  }
+
+  function createStreamingReport(head) {
+    const report = {
+      supplier_name: head.supplier_name,
+      recommendation: head.recommendation,
+      credit_code: head.credit_code || "",
+      summary: "",
+      risks: [],
+      evidence_table: [],
+      open_questions: [],
+    };
+    let card = renderReport(report);
+    return {
+      get node() { return card; },
+      append(event, data) {
+        if (event === "summary_delta") report.summary += data.text;
+        else if (event === "risk") report.risks.push(data.text);
+        else if (event === "evidence") report.evidence_table.push(data);
+        else if (event === "open_question") report.open_questions.push(data.text);
+        else return;
+        const next = renderReport(report);
+        card.replaceWith(next);
+        card = next;
+      },
+    };
   }
 
   // ---- 气泡 / 加载 / 错误 ----
@@ -213,6 +239,30 @@
     return data.report;
   }
 
+  async function streamSessionTurn(question, onEvent) {
+    const res = await fetch("/session/turn/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+      body: JSON.stringify({ question, user_id: userId, session_id: sessionId }),
+    });
+    if (!res.ok || !res.body) { const e = new Error("HTTP " + res.status); e.status = res.status; throw e; }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const packets = buffer.split("\n\n");
+      buffer = packets.pop();
+      for (const packet of packets) {
+        const event = /^event: (.+)$/m.exec(packet);
+        const data = /^data: (.+)$/m.exec(packet);
+        if (event && data) await onEvent(event[1], JSON.parse(data[1]));
+      }
+      if (done) break;
+    }
+  }
+
   let pending = false;
   async function submit() {
     const text = q.value.trim();
@@ -223,9 +273,20 @@
     const thinking = appendThinking();
     scrollDown();
     try {
-      const report = await sessionTurn(text);
-      thinking.remove();
-      appendAssistant(renderReport(report));
+      let streamed = null;
+      await streamSessionTurn(text, async (event, data) => {
+        if (event === "session") sessionId = data.session_id;
+        else if (event === "progress") thinking.lastChild.textContent = data.message;
+        else if (event === "report_start") {
+          thinking.remove();
+          streamed = createStreamingReport(data);
+          appendAssistant(streamed.node);
+        } else if (streamed) {
+          streamed.append(event, data);
+          await new Promise(requestAnimationFrame);
+        }
+        scrollDown();
+      });
     } catch (err) {
       thinking.remove();
       handleError(err, text);

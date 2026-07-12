@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 from langgraph.graph import END, StateGraph
@@ -151,6 +152,54 @@ def execute_turn(
     if memory_lines:
         _surface_memory(state, memory_lines)
     return state
+
+
+def iter_execute_turn(
+    app,
+    question: str,
+    domain: str,
+    session=None,
+    memory=None,
+    enable_memory: bool = False,
+) -> Iterator[tuple[str, ResearchState]]:
+    """Run one turn and yield each completed graph node before the final state."""
+    preresolved = None
+    memory_lines: list[str] = []
+    if enable_memory and session is not None:
+        preresolved = session.resolve_anaphora(question)
+        if memory is not None:
+            memory_lines = memory.recall(session.user_id, question)
+
+    final_state: ResearchState | None = None
+    for update in app.stream(
+        ResearchState(question=question, domain=domain, preresolved=preresolved),
+        stream_mode="updates",
+    ):
+        for node_name, value in update.items():
+            final_state = (
+                value
+                if isinstance(value, ResearchState)
+                else ResearchState.model_validate(value)
+            )
+            yield node_name, final_state
+
+    if final_state is None:
+        raise RuntimeError("research graph completed without a state")
+
+    if enable_memory and session is not None:
+        if final_state.supplier_resolution is not None:
+            session.note_entity(final_state.supplier_resolution)
+        if memory is not None:
+            memory.remember(
+                session.user_id,
+                [
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": _report_summary(final_state)},
+                ],
+            )
+    if memory_lines:
+        _surface_memory(final_state, memory_lines)
+    yield "complete", final_state
 
 
 def run_research(
