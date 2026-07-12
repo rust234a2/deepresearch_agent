@@ -193,17 +193,6 @@ def _report_message_chunks(report: dict):
         f"{report['supplier_name']}\n\n结论：{recommendation}",
         report.get("summary", ""),
     ]
-    if report.get("risks"):
-        sections.append("提示：\n" + "\n".join(f"- {item}" for item in report["risks"]))
-    if report.get("evidence_table"):
-        evidence = "\n".join(
-            f"- [{item['dimension']}] {item['claim']}"
-            for item in report["evidence_table"]
-        )
-        sections.append(f"本地证据：\n{evidence}")
-    if report.get("open_questions"):
-        questions = "\n".join(f"- {item}" for item in report["open_questions"])
-        sections.append(f"仍需核验：\n{questions}")
     for section in sections:
         if section:
             yield from _text_chunks(f"\n\n{section}")

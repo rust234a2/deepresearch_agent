@@ -29,7 +29,9 @@ def test_graph_generates_source_backed_company_report(company_database_path):
     assert final_state.report.supplier_name == "示例科技股份有限公司"
     assert final_state.report.recommendation == "insufficient_evidence"
     assert final_state.report.evidence_table
-    assert {item.dimension for item in final_state.evidence} == set(DOMAIN_PACK.research_dimensions)
+    assert {item.dimension for item in final_state.evidence} == {
+        "company_identity", "registration", "industry_and_business_scope"
+    }
     assert "工业设备制造" in " ".join(item.claim for item in final_state.evidence)
 
 

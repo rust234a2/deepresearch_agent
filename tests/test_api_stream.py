@@ -26,4 +26,6 @@ def test_stream_turn_emits_progress_and_incremental_report(company_database_path
     assert "event: progress" in body
     assert "event: report_start" in body
     assert "event: message_delta" in body
+    assert "event: evidence" not in body
+    assert "event: open_question" not in body
     assert "event: complete" in body

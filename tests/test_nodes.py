@@ -37,6 +37,40 @@ def test_planner_resolves_alias_to_legal_name(company_database_path):
     assert updated.supplier_resolution.status == "resolved"
 
 
+def test_planner_limits_dimensions_to_the_question(company_database_path):
+    state = ResearchState(
+        question="核验示例科技股份有限公司的工商和经营范围", domain="procurement"
+    )
+
+    updated = planner_node(state, DOMAIN_PACK, _repository(company_database_path))
+
+    assert [item.dimension for item in updated.plan] == [
+        "company_identity",
+        "registration",
+        "industry_and_business_scope",
+    ]
+
+
+def test_researcher_skips_unrequested_tools(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(
+            question="核验示例科技股份有限公司的工商和经营范围", domain="procurement"
+        ),
+        DOMAIN_PACK,
+        repository,
+    )
+
+    updated = researcher_node(state, build_procurement_tool_registry(repository), DOMAIN_PACK)
+
+    assert {item.dimension for item in updated.evidence} == {
+        "company_identity",
+        "registration",
+        "industry_and_business_scope",
+    }
+    assert [item.tool_name for item in updated.trace] == ["get_company_profile"]
+
+
 def test_planner_does_not_plan_unknown_company(company_database_path):
     state = ResearchState(question="核验不存在企业", domain="procurement")
 

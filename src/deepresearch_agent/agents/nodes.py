@@ -39,6 +39,30 @@ _RELATION_LABELS = {
     "shared_investee": "共同对外投资",
 }
 
+_DIMENSION_KEYWORDS = {
+    "company_identity": ("工商", "基本信息", "主体信息", "统一社会信用代码", "信用代码", "曾用名"),
+    "registration": ("工商", "登记", "注册状态", "法定代表人", "法人", "成立日期", "登记机关"),
+    "capital": ("注册资本", "实缴资本", "注册资金", "实收资本"),
+    "industry_and_business_scope": ("经营范围", "业务范围", "行业", "主营", "经营业务"),
+    "enterprise_scale": ("企业规模", "规模", "员工", "参保人数"),
+    "contact": ("联系方式", "电话", "邮箱", "地址", "联系"),
+    "ownership_structure": ("股东", "股权", "持股", "控股", "对外投资", "投资关系"),
+    "related_parties": ("关联方", "关联企业", "关联公司", "关联关系"),
+}
+
+_DIMENSION_LABELS = {
+    "company_identity": "主体身份",
+    "registration": "工商登记",
+    "capital": "注册资本",
+    "industry_and_business_scope": "行业与经营范围",
+    "enterprise_scale": "企业规模",
+    "contact": "联系方式",
+    "ownership_structure": "股权结构",
+    "related_parties": "关联方线索",
+}
+
+_FULL_RESEARCH_KEYWORDS = ("全面核验", "完整核验", "全方位", "尽调", "所有信息", "全部信息")
+
 
 def planner_node(
     state: ResearchState,
@@ -57,6 +81,7 @@ def planner_node(
         state.plan = []
         return state
 
+    requested_dimensions = _select_plan_dimensions(state.question, domain_pack.research_dimensions)
     state.plan = [
         ResearchPlanItem(
             dimension=dimension,
@@ -65,9 +90,24 @@ def planner_node(
             ),
             priority=1 if dimension in {"company_identity", "registration"} else 2,
         )
-        for dimension in domain_pack.research_dimensions
+        for dimension in requested_dimensions
     ]
     return state
+
+
+def _select_plan_dimensions(question: str, available_dimensions: list[str]) -> list[str]:
+    """Select only the research dimensions explicitly requested by the user."""
+    if any(keyword in question for keyword in _FULL_RESEARCH_KEYWORDS):
+        return list(available_dimensions)
+
+    requested = {
+        dimension
+        for dimension, keywords in _DIMENSION_KEYWORDS.items()
+        if dimension in available_dimensions and any(keyword in question for keyword in keywords)
+    }
+    if not requested:
+        return list(available_dimensions)
+    return [dimension for dimension in available_dimensions if dimension in requested]
 
 
 def researcher_node(
@@ -134,34 +174,46 @@ def _research_named(state: ResearchState, tools: ToolRegistry, domain_pack: Doma
     if state.supplier_name is None or state.company_credit_code is None:
         raise ValueError("planner_node must resolve a company before researcher_node")
 
-    if "get_company_profile" in domain_pack.allowed_tools:
+    requested_dimensions = {item.dimension for item in state.plan}
+    profile_dimensions = {
+        "company_identity",
+        "registration",
+        "capital",
+        "industry_and_business_scope",
+        "enterprise_scale",
+    }
+
+    if requested_dimensions & profile_dimensions and "get_company_profile" in domain_pack.allowed_tools:
         result = _run_tool(
             state, tools, "get_company_profile", {"credit_code": state.company_credit_code}
         )
         if result is not None and result.status == "ok":
             _append_profile_evidence(state, result.data)
 
-    if "get_company_contact" in domain_pack.allowed_tools:
+    if "contact" in requested_dimensions and "get_company_contact" in domain_pack.allowed_tools:
         result = _run_tool(
             state, tools, "get_company_contact", {"credit_code": state.company_credit_code}
         )
         if result is not None and result.status == "ok":
             _append_contact_evidence(state, result.data)
 
-    if "get_ownership_neighborhood" in domain_pack.allowed_tools:
+    if "ownership_structure" in requested_dimensions and "get_ownership_neighborhood" in domain_pack.allowed_tools:
         result = _run_tool(
             state, tools, "get_ownership_neighborhood", {"credit_code": state.company_credit_code}
         )
         if result is not None and result.status == "ok":
             _append_ownership_evidence(state, result.data)
 
-    if "get_related_parties" in domain_pack.allowed_tools:
+    if "related_parties" in requested_dimensions and "get_related_parties" in domain_pack.allowed_tools:
         result = _run_tool(
             state, tools, "get_related_parties", {"credit_code": state.company_credit_code}
         )
         if result is not None and result.status == "ok":
             _append_related_parties_evidence(state, result.data)
 
+    state.evidence = [
+        evidence for evidence in state.evidence if evidence.dimension in requested_dimensions
+    ]
     state.iteration += 1
 
 
@@ -266,7 +318,7 @@ def writer_node(state: ResearchState, domain_pack: DomainPack) -> ResearchState:
     state.report = SupplierReport(
         supplier_name=state.supplier_name,
         recommendation="insufficient_evidence",
-        summary="已完成本地工商和联系方式核验；现有数据不足以作出采购批准或风险结论。",
+        summary=_requested_dimension_summary(state),
         risks=[
             "当前数据源不包含制裁、司法、负面新闻、财务和采购履约数据，"
             "不能据此作出采购批准或风险结论。"
@@ -275,6 +327,55 @@ def writer_node(state: ResearchState, domain_pack: DomainPack) -> ResearchState:
         open_questions=open_questions,
     )
     return state
+
+
+def _requested_dimension_summary(state: ResearchState) -> str:
+    requested = [item.dimension for item in state.plan]
+    labels = "、".join(_DIMENSION_LABELS.get(item, item) for item in requested)
+    paragraphs = [f"已按你的问题核验{labels}。"]
+    for dimension in requested:
+        claims = [item.claim for item in state.evidence if item.dimension == dimension]
+        if claims:
+            paragraphs.append(_natural_dimension_paragraph(dimension, claims))
+    paragraphs.append(
+        "以上仅依据当前本地工商登记与联系方式数据；未接入制裁、司法、负面新闻、财务、产能、交期、认证或采购履约数据，不能据此作出采购批准或风险结论。"
+    )
+    return "\n\n".join(paragraphs)
+
+
+def _natural_dimension_paragraph(dimension: str, claims: list[str]) -> str:
+    claim = "；".join(claims)
+    replacements = {
+        "法定名称：": "法定名称为",
+        "；统一社会信用代码：": "，统一社会信用代码为",
+        "；曾用名：": "；曾用名包括",
+        "登记状态：": "登记状态为",
+        "；法定代表人：": "，法定代表人为",
+        "；企业类型：": "，企业类型为",
+        "；成立日期：": "，成立于",
+        "；登记机关：": "，登记机关为",
+        "注册资本：": "注册资本为",
+        "；实缴资本：": "，实缴资本为",
+        "行业门类：": "所在行业门类为",
+        "；行业大类：": "，行业大类为",
+        "；行业中类：": "，行业中类为",
+        "；行业小类：": "，行业小类为",
+        "；经营范围：": "。登记经营范围包括：",
+    }
+    for source, target in replacements.items():
+        claim = claim.replace(source, target)
+
+    prefixes = {
+        "company_identity": "该企业的",
+        "registration": "工商登记显示，该企业",
+        "capital": "资本信息显示，该企业",
+        "industry_and_business_scope": "按登记信息，该企业",
+        "enterprise_scale": "企业规模信息显示，",
+        "contact": "可查到的联系方式为：",
+        "ownership_structure": "登记股权信息显示，",
+        "related_parties": "关联方线索显示，",
+    }
+    return prefixes.get(dimension, "核验结果显示，") + claim + "。"
 
 
 def _write_scope_report(state: ResearchState) -> ResearchState:
