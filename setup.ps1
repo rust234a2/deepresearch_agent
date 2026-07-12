@@ -35,7 +35,9 @@ param(
     [string]$Neo4jPassword = "devpassword"
 )
 
-$ErrorActionPreference = "Stop"
+# 不用 "Stop"：PowerShell 5.1 下原生命令（pip/python/docker）往 stderr 写内容（哪怕退出码 0、
+# 哪怕只是 WARNING 或进度条）会被 Stop 当成终止错误误杀。改用每个原生调用后的 $LASTEXITCODE 判真失败。
+$ErrorActionPreference = "Continue"
 $py = ".\.conda-env\python.exe"
 
 function Step($m) { Write-Host "`n=== $m ===" -ForegroundColor Cyan }
@@ -66,8 +68,10 @@ $extras = if ($WithMemory) { "rag,neo4j,memory" } else { "rag,neo4j" }
 if ($WithMemory -and -not $env:DEEPSEEK_API_KEY) {
     Warn "已选 -WithMemory 但未设 DEEPSEEK_API_KEY；mem0 运行时会静默 no-op（不影响其余能力）。"
 }
-& $py -m pip install -e ".[$extras]"
-if ($LASTEXITCODE -ne 0) { Die "pip 安装失败（extras=$extras）" }
+# --no-build-isolation：用 conda env 里现成的 setuptools 构建，不新建隔离环境去联网取
+# 构建依赖（否则清华镜像偶发对 setuptools wheel 返回 403，且这里本就该用本地 setuptools）。
+& $py -m pip install -e ".[$extras]" --no-build-isolation
+if ($LASTEXITCODE -ne 0) { Die "pip 安装失败（extras=$extras）。若报缺 setuptools/wheel，先 $py -m pip install -U setuptools wheel 再重试。" }
 Ok "已装 .[$extras]"
 
 # ---- 2. 构建 FAISS 经营范围索引（幂等）----
