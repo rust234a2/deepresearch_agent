@@ -22,7 +22,7 @@ class Neo4jBackend:
 
         uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
         user = os.environ.get("NEO4J_USER", "neo4j")
-        password = os.environ.get("NEO4J_PASSWORD", "")
+        password = os.environ.get("NEO4J_PASSWORD", "devpassword")
         driver = GraphDatabase.driver(uri, auth=(user, password))
         driver.verify_connectivity()
         return cls(driver)

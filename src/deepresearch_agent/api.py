@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from pathlib import Path
 from typing import Annotated
@@ -80,6 +81,14 @@ def create_app(
     store = session_store if session_store is not None else JsonSessionStore(DEFAULT_SESSIONS_DIR)
     if polisher == "__default__":
         polisher = build_deepseek_polisher()
+
+    logger = logging.getLogger("deepresearch.api")
+    try:
+        from deepresearch_agent.neo4j_backend import Neo4jBackend
+        Neo4jBackend.from_env()
+        logger.info("[graph] Neo4j backend: connected")
+    except Exception:
+        logger.info("[graph] Neo4j backend: unavailable (fallback to scope)")
 
     def graph_for(domain: str) -> object:
         if domain not in compiled_graphs:
