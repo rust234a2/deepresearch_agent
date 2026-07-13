@@ -277,7 +277,7 @@ def _report_message_chunks(report: dict, report_type: str):
         sections = [
             head, report.get("summary", ""),
             "候选企业：\n" + "\n".join(cand) if cand else "",
-            "围标线索（线索级·须人工复核）：\n" + "\n".join(clue) if clue else "",
+            "关联关系：\n" + "\n".join(clue) if clue else "",
         ]
     for section in sections:
         if section:

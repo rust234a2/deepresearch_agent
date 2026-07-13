@@ -147,7 +147,7 @@ def test_researcher_emits_related_parties_with_low_confidence_clues(tmp_path):
     assert related
     person = next(e for e in related if "共同自然人" in e.claim)
     assert person.confidence == 0.2
-    assert "须人工复核" in person.claim
+    assert "经由自然人" in person.claim
     ownership = [e for e in updated.evidence if e.dimension == "ownership_structure"]
     assert any("股东" in e.claim or "对外投资" in e.claim for e in ownership)
 
@@ -354,7 +354,7 @@ def test_researcher_graph_mode_builds_candidates_and_shared(tmp_path, company_da
     shared = {s.controller_name: s for s in updated.shared_controllers}
     assert shared["共同控股集团有限公司"].via_person is False
     assert shared["张三"].via_person is True
-    assert "须人工复核" in shared["张三"].note
+    assert shared["张三"].note == "经自然人节点关联"
 
 
 def test_researcher_graph_mode_falls_back_to_scope_when_searcher_absent(company_database_path):
@@ -441,14 +441,14 @@ def test_writer_graph_report_from_findings(company_database_path):
     state.shared_controllers = [
         SharedControllerFinding(
             controller_name="张三", controlled_companies=["甲公司", "乙公司"],
-            via_person=True, note="经同名自然人推断，须人工复核",
+            via_person=True, note="经自然人节点关联",
         )
     ]
     updated = writer_node(state, DOMAIN_PACK)
     assert updated.graph_report is not None
     assert updated.graph_report.recommendation == "insufficient_evidence"
-    assert "共享控制人" in updated.graph_report.summary
-    assert any("围标" in q or "须人工复核" in q for q in updated.graph_report.open_questions)
+    assert "共享关联" in updated.graph_report.summary
+    assert "接入制裁和监管名单数据。" in updated.graph_report.open_questions
     assert updated.report is None
 
 
@@ -630,7 +630,7 @@ def test_graph_findings_flag_industry_collusion_note():
     _candidates, shared = _build_graph_findings(context)
     finding = shared[0]
     assert finding.concentrated_industries == ["机床制造"]
-    assert "同行业" in finding.note and "围标" in finding.note and "须人工复核" in finding.note
+    assert finding.note == "同行业（机床制造）+同控制人"
 
 
 def test_graph_findings_keep_plain_note_without_concentration():
@@ -649,7 +649,7 @@ def test_graph_findings_keep_plain_note_without_concentration():
     )
     _candidates, shared = _build_graph_findings(context)
     assert shared[0].concentrated_industries == []
-    assert shared[0].note == "经企业股权链推断"
+    assert shared[0].note == "经企业股权链关联"
 
 
 def test_writer_graph_summary_flags_collusion(company_database_path):
@@ -665,7 +665,7 @@ def test_writer_graph_summary_flags_collusion(company_database_path):
     state.shared_controllers = [
         SharedControllerFinding(
             controller_name="张三", controlled_companies=["甲", "丙"], via_person=True,
-            note="同行业（机床制造）+同控制人，疑似围标/集中度线索，须人工复核",
+            note="同行业（机床制造）+同控制人",
             concentrated_industries=["机床制造"],
         )
     ]

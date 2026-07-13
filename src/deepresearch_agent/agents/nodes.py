@@ -35,7 +35,7 @@ _RELATION_LABELS = {
     "direct_shareholder": "直接股东",
     "direct_investee": "直接被投资",
     "shared_corporate_shareholder": "共同企业股东",
-    "shared_person_shareholder": "共同自然人(疑似)",
+    "shared_person_shareholder": "共同自然人",
     "shared_investee": "共同对外投资",
 }
 
@@ -252,26 +252,18 @@ def _build_graph_findings(context):
             unified_social_credit_code=seed.code,
             legal_name=seed.name,
             top_score=seed.score,
-            ultimate_controllers=[
-                f"{controller.display_name}（疑·须人工复核）"
-                if controller.via_person
-                else controller.display_name
-                for controller in seed.controllers
-            ],
+            ultimate_controllers=[controller.display_name for controller in seed.controllers],
         )
         for seed in context.seeds
     ]
     shared = []
     for item in context.shared_controllers:
         if item.concentrated_industries:
-            note = (
-                f"同行业（{'、'.join(item.concentrated_industries)}）+同控制人，"
-                "疑似围标/集中度线索，须人工复核"
-            )
+            note = f"同行业（{'、'.join(item.concentrated_industries)}）+同控制人"
         elif item.via_person:
-            note = "经同名自然人推断，须人工复核"
+            note = "经自然人节点关联"
         else:
-            note = "经企业股权链推断"
+            note = "经企业股权链关联"
         shared.append(
             SharedControllerFinding(
                 controller_name=item.name,
@@ -311,9 +303,6 @@ def writer_node(state: ResearchState, domain_pack: DomainPack) -> ResearchState:
             "接入产能、交期与质量认证数据。",
             "接入内部采购履约数据。",
         ]
-    )
-    open_questions.append(
-        "股权关联方为线索级推断（尤其同名自然人），须人工复核，不构成控制关系或采购结论。"
     )
     state.report = SupplierReport(
         supplier_name=state.supplier_name,
@@ -421,9 +410,9 @@ def _write_graph_report(state: ResearchState) -> ResearchState:
     if candidates:
         if shared:
             collusion = sum(1 for s in shared if s.concentrated_industries)
-            middle = f"其中 {len(shared)} 组疑似共享控制人（围标/集中度线索，须人工复核）；"
+            middle = f"其中 {len(shared)} 组共享关联；"
             if collusion:
-                middle += f"其中 {collusion} 组同行业+同控制人（更强围标线索，须人工复核）；"
+                middle += f"其中 {collusion} 组同行业+同控制人关联；"
         else:
             middle = "未发现候选间共享控制人；"
         summary = (
@@ -485,7 +474,6 @@ def _group_scope_hits(hits) -> list[ScopeCandidate]:
 
 _GRAPH_OPEN_QUESTIONS = [
     "经营范围匹配仅为登记信息，不代表实际产能、交期或质量。",
-    "共享控制人为线索级推断（尤其同名自然人），须人工复核，不构成围标认定。",
     "接入制裁和监管名单数据。",
     "接入司法案件与负面新闻数据。",
     "接入财务数据。",

@@ -45,7 +45,7 @@ def test_find_related_parties_covers_all_relation_types_and_filters_noise(tmp_pa
     assert person.confidence == 0.2
     assert person.via_is_person is True
     assert person.shared_degree == 2
-    assert "须人工复核" in person.reliability_note
+    assert "经由自然人" in person.reliability_note
 
     corporate = next(p for p in parties if p.relation_type == "shared_corporate_shareholder")
     assert corporate.confidence == 0.5

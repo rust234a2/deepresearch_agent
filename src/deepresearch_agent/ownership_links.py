@@ -37,13 +37,10 @@ def _reliability_note(
     if relation_type == "direct_investee":
         return f"登记直接投资关系：{anchor_name} 投资 {related_name}。"
     if relation_type == "shared_corporate_shareholder":
-        return f"经由共同企业股东「{via_node}」推断的关联，需人工核实是否构成共同控制。"
+        return f"经由共同企业股东「{via_node}」关联。"
     if relation_type == "shared_person_shareholder":
-        return (
-            f"经由同名自然人「{via_node}」关联（该姓名共连接 {degree} 家库内公司），"
-            "疑似重名，信息不可靠，须人工复核确认是否同一人。"
-        )
-    return f"经由共同对外投资「{via_node}」推断的弱关联，合资不等于同一控制。"
+        return f"经由自然人「{via_node}」关联（该姓名共连接 {degree} 家库内公司）。"
+    return f"经由共同对外投资「{via_node}」关联。"
 
 
 def find_related_parties(

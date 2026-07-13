@@ -58,9 +58,10 @@ def test_chunks_scope_lists_candidates():
     assert "乙公司" in text and "候选" in text
 
 
-def test_chunks_graph_lists_candidates_and_collusion():
+def test_chunks_graph_lists_candidates_and_relations_without_review_banner():
     _, report = _resolve_report(_graph_state())
     text = "".join(_report_message_chunks(report, "graph"))
     assert "丙公司" in text
     assert "张三" in text
-    assert "须人工复核" in text
+    assert "关联关系" in text
+    assert "须人工复核" not in text and "疑" not in text
