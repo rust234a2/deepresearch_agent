@@ -6,6 +6,10 @@
   const thread = $("#thread");
   const q = $("#q");
   const sendBtn = $("#send");
+  const sidebar = $("#sidebar");
+  const conversations = $("#conversations");
+  const sessionCount = $("#session-count");
+  const sidebarToggle = $("#sidebar-toggle");
 
   // ---- 身份（localStorage）与会话（内存） ----
   const KEY = "dr_user_id";
@@ -14,7 +18,19 @@
     userId = "demo-" + Math.random().toString(36).slice(2, 8);
     localStorage.setItem(KEY, userId);
   }
+  const transcriptKey = () => "dr_session_transcripts:" + userId;
+  function loadTranscripts() {
+    try {
+      const value = JSON.parse(localStorage.getItem(transcriptKey()) || "{}");
+      return value && typeof value === "object" ? value : {};
+    } catch (_) {
+      return {};
+    }
+  }
   let sessionId = null;
+  let sessions = [];
+  let entries = [];
+  let transcripts = loadTranscripts();
   $("#uid").textContent = userId;
 
   // ---- DOM 小工具 ----
@@ -26,6 +42,78 @@
   }
   const scrollDown = () => { stream.scrollTop = stream.scrollHeight; };
   const NS = "http://www.w3.org/2000/svg";
+
+  function currentTitle() {
+    const item = sessions.find((x) => x.session_id === sessionId);
+    return item ? item.title : "历史对话";
+  }
+  function saveEntries() {
+    if (!sessionId) return;
+    transcripts[sessionId] = entries.slice(-60);
+    try { localStorage.setItem(transcriptKey(), JSON.stringify(transcripts)); } catch (_) { /* 本地空间不足时仍可继续对话 */ }
+  }
+  function addEntry(entry) {
+    entries.push(entry);
+    saveEntries();
+  }
+  function formatTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.valueOf())) return "刚刚";
+    const now = new Date();
+    if (date.toDateString() === now.toDateString()) {
+      return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    }
+    return date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+  }
+  function renderSessions() {
+    sessionCount.textContent = String(sessions.length);
+    conversations.replaceChildren();
+    if (!sessions.length) {
+      conversations.appendChild(el("p", "sidebar-empty", "还没有历史对话。开始一次核验后会显示在这里。"));
+      return;
+    }
+    sessions.forEach((item) => {
+      const button = el("button", "conversation" + (item.session_id === sessionId ? " active" : ""));
+      button.type = "button";
+      button.appendChild(el("span", "conversation-title", item.title));
+      button.appendChild(el("span", "conversation-time", formatTime(item.updated_at)));
+      button.addEventListener("click", () => openSession(item.session_id));
+      conversations.appendChild(button);
+    });
+  }
+  async function loadSessions() {
+    try {
+      const res = await fetch("/sessions?user_id=" + encodeURIComponent(userId));
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      sessions = await res.json();
+      renderSessions();
+    } catch (_) {
+      conversations.replaceChildren(el("p", "sidebar-empty", "暂时无法加载历史对话。"));
+    }
+  }
+  function setSidebarOpen(open) {
+    sidebar.classList.toggle("open", open);
+    sidebarToggle.setAttribute("aria-expanded", String(open));
+  }
+  function openSession(id) {
+    if (pending) return;
+    sessionId = id;
+    entries = Array.isArray(transcripts[id]) ? transcripts[id] : [];
+    greeting();
+    renderSessions();
+    setSidebarOpen(false);
+    scrollDown();
+  }
+  function startNewConversation() {
+    if (pending) return;
+    sessionId = null;
+    entries = [];
+    greeting();
+    renderSessions();
+    setSidebarOpen(false);
+    q.focus();
+    scrollDown();
+  }
 
   function lockIcon() {
     const svg = document.createElementNS(NS, "svg");
@@ -172,6 +260,7 @@
     return {
       node: bubble,
       hasContent() { return hasContent; },
+      text() { return bubble.textContent; },
       append(event, data) {
         if (event === "message_delta" || event === "summary_delta") {
           appendText(data.text);
@@ -195,6 +284,10 @@
     wrap.appendChild(el("div", "avatar u", "我"));
     wrap.appendChild(el("div", "bubble-user", text));
     thread.appendChild(wrap);
+  }
+  function appendAssistantText(text) {
+    const bubble = el("div", "bubble-assistant", text);
+    appendAssistant(bubble);
   }
   function appendThinking() {
     const wrap = el("div", "msg");
@@ -271,13 +364,18 @@
     if (!text || pending) return;
     pending = true; sendBtn.disabled = true;
     appendUser(text);
+    addEntry({ type: "user", text });
     q.value = ""; autosize();
     const thinking = appendThinking();
     scrollDown();
     try {
       let streamed = null;
       await streamSessionTurn(text, async (event, data) => {
-        if (event === "session") sessionId = data.session_id;
+        if (event === "session") {
+          sessionId = data.session_id;
+          saveEntries();
+          renderSessions();
+        }
         else if (event === "progress") thinking.lastChild.textContent = data.message;
         else if (event === "report_start") {
           thinking.remove();
@@ -287,7 +385,11 @@
           streamed.append(event, data);
           await new Promise(requestAnimationFrame);
         } else if (event === "complete" && streamed && !streamed.hasContent()) {
-          streamed.append("服务端未返回可显示的正文。请重启本地 Uvicorn 服务后重试。");
+          streamed.append("message_delta", { text: "服务端未返回可显示的正文。请重启本地 Uvicorn 服务后重试。" });
+        }
+        if (event === "complete" && streamed) {
+          addEntry({ type: "assistant", text: streamed.text() });
+          await loadSessions();
         }
         scrollDown();
       });
@@ -305,19 +407,39 @@
     if (err.status === 400) { msg = "会话标识异常，已为你开新会话，请重发。"; sessionId = null; }
     else if (err.status === 404) { msg = "找不到该会话，已开新会话，请重发。"; sessionId = null; }
     else { msg = "请求失败，请重试。"; retry = () => { q.value = question; submit(); }; }
+    if (err.status === 400 || err.status === 404) {
+      entries = [];
+      greeting();
+      renderSessions();
+    }
     appendError(msg, retry);
   }
 
   // ---- 外壳交互 ----
-  function greeting() {
+  function renderThread() {
     thread.replaceChildren();
-    thread.appendChild(el("div", "day", "新会话 · 待生成 session_id"));
+    thread.appendChild(el("div", "day", sessionId ? "当前会话 · " + currentTitle() : "新会话 · 待生成 session_id"));
+    if (entries.length) {
+      entries.forEach((entry) => {
+        if (entry.type === "user") appendUser(entry.text || "");
+        if (entry.type === "assistant") appendAssistantText(entry.text || "");
+      });
+      return;
+    }
     const wrap = el("div", "msg");
     wrap.appendChild(el("div", "avatar a", "DR"));
-    wrap.appendChild(el("div", "thinking", "输入一家供应商名称开始核验，例如「核验示例科技股份有限公司的工商与经营范围」。"));
+    wrap.appendChild(el("div", "thinking", sessionId
+      ? "已恢复这段历史对话。你可以继续追问该供应商。"
+      : "输入一家供应商名称开始核验，例如「核验示例科技股份有限公司的工商与经营范围」。"));
     thread.appendChild(wrap);
   }
-  $("#newchat").addEventListener("click", () => { sessionId = null; greeting(); scrollDown(); });
+
+  function greeting() {
+    renderThread();
+  }
+  $("#newchat").addEventListener("click", startNewConversation);
+  $("#newchat-side").addEventListener("click", startNewConversation);
+  sidebarToggle.addEventListener("click", () => setSidebarOpen(!sidebar.classList.contains("open")));
 
   $("#theme").addEventListener("click", () => {
     const cur = root.getAttribute("data-theme")
@@ -331,6 +453,11 @@
       userId = name.trim();
       localStorage.setItem(KEY, userId);
       $("#uid").textContent = userId;
+      sessionId = null;
+      entries = [];
+      transcripts = loadTranscripts();
+      greeting();
+      loadSessions();
     }
   });
 
@@ -339,5 +466,7 @@
   sendBtn.addEventListener("click", submit);
   q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } });
 
+  greeting();
+  loadSessions();
   scrollDown();
 })();

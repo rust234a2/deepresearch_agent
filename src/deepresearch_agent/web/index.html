@@ -7,10 +7,10 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <div class="app">
-    <header class="bar">
-      <div class="brand">
-        <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="对话管理">
+      <div class="sidebar-brand">
+        <svg width="28" height="28" viewBox="0 0 26 26" fill="none" aria-hidden="true">
           <rect x="1.2" y="1.2" width="23.6" height="23.6" rx="6.4" fill="var(--accent)"/>
           <circle cx="11.4" cy="11.4" r="5" fill="none" stroke="#fff" stroke-width="1.9"/>
           <line x1="15.2" y1="15.2" x2="19.6" y2="19.6" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/>
@@ -20,38 +20,53 @@
           <div class="sub">供应商工商研究</div>
         </div>
       </div>
-      <div class="spacer"></div>
-      <button class="chip" id="identity" title="演示身份（无鉴权，点击可改名）">
-        <span class="dot"></span><span>身份</span><span class="id" id="uid">demo</span>
+      <button class="sidebar-new" id="newchat-side" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        新建对话
       </button>
-      <button class="iconbtn" id="theme" title="切换主题" aria-label="切换主题">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-      </button>
-      <button class="btn-primary" id="newchat" title="清空并开新会话">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        新对话
-      </button>
-    </header>
-
-    <div class="stream" id="stream">
-      <div class="thread" id="thread">
-        <div class="day">新会话 · 待生成 session_id</div>
-        <div class="msg">
-          <div class="avatar a">DR</div>
-          <div class="thinking">输入一家供应商名称开始核验，例如「核验示例科技股份有限公司的工商与经营范围」。</div>
-        </div>
+      <div class="sidebar-heading">
+        <span>历史对话</span>
+        <span class="session-count" id="session-count">0</span>
       </div>
-    </div>
+      <nav class="conversation-list" id="conversations" aria-label="历史对话列表">
+        <p class="sidebar-empty">正在加载历史对话…</p>
+      </nav>
+      <p class="sidebar-note">对话按当前演示身份隔离保存。</p>
+    </aside>
 
-    <footer class="composer">
-      <div class="composer-inner">
-        <textarea id="q" rows="1" placeholder="输入供应商名称或追问，例如「核验示例科技股份有限公司」…"></textarea>
-        <button class="send" id="send" title="发送" aria-label="发送">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-3-6-7-2z"/></svg>
+    <div class="app">
+      <header class="bar">
+        <button class="iconbtn sidebar-toggle" id="sidebar-toggle" title="打开对话列表" aria-label="打开对话列表" aria-expanded="false">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
+        <div class="mobile-brand">DeepResearch</div>
+        <div class="spacer"></div>
+        <button class="chip" id="identity" title="演示身份（无鉴权，点击可改名）">
+          <span class="dot"></span><span>身份</span><span class="id" id="uid">demo</span>
+        </button>
+        <button class="iconbtn" id="theme" title="切换主题" aria-label="切换主题">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+        <button class="btn-primary compact-new" id="newchat" title="清空并开启新会话">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          <span>新对话</span>
+        </button>
+      </header>
+
+      <div class="stream" id="stream">
+        <div class="thread" id="thread"></div>
       </div>
-      <div class="hint"><kbd>Enter</kbd> 发送 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</div>
-    </footer>
+
+      <footer class="composer">
+        <div class="composer-inner">
+          <textarea id="q" rows="1" placeholder="输入供应商名称或追问，例如「核验示例科技股份有限公司」"></textarea>
+          <button class="send" id="send" title="发送" aria-label="发送">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-3-6-7-2z"/></svg>
+          </button>
+        </div>
+        <div class="hint"><kbd>Enter</kbd> 发送 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 换行</div>
+      </footer>
+    </div>
   </div>
   <script src="/static/app.js" defer></script>
 </body>

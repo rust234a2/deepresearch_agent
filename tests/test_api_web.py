@@ -34,6 +34,14 @@ def test_static_js_served(company_database_path, tmp_path):
     assert r.status_code == 200
 
 
+def test_web_includes_conversation_sidebar(company_database_path, tmp_path):
+    r = _client(company_database_path, tmp_path).get("/")
+
+    assert 'id="sidebar"' in r.text
+    assert 'id="conversations"' in r.text
+    assert 'id="newchat-side"' in r.text
+
+
 def test_research_endpoint_unchanged(company_database_path, tmp_path):
     r = _client(company_database_path, tmp_path).post("/research", json={"question": ENTITY})
     assert r.status_code == 200
