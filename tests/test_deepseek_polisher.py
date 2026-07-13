@@ -9,6 +9,18 @@ class _FakeStream:
     def __iter__(self): return iter([_FakeChunk("甲公司"), _FakeChunk("经营范围…"), _FakeChunk("")])
 
 
+class _LiteralNlStream:
+    def __iter__(self): return iter([_FakeChunk("甲公司\\n\\n经营范围")])  # LLM 吐字面反斜杠n
+
+
+class _LiteralNlCompletions:
+    def create(self, **kw): return _LiteralNlStream()
+
+
+class _LiteralNlClient:
+    chat = type("Chat", (), {"completions": _LiteralNlCompletions()})()
+
+
 class _FakeCompletions:
     def create(self, **kw): return _FakeStream()
 
@@ -32,6 +44,20 @@ def test_render_includes_facts_excludes_conclusion():
     assert "证据不足" not in text  # 结论句不进 LLM 输入
 
 
+def test_render_named_drops_conclusion_bearing_summary():
+    # summary 含结论式表述时，绝不进 LLM 输入（否则 LLM 会复述、与后端硬发的结论重复）
+    report = {
+        "recommendation": "insufficient_evidence",
+        "supplier_name": "亚联机械股份有限公司",
+        "summary": "已完成核验；现有数据不足以作出采购批准或风险结论。",
+        "evidence_table": [{"dimension": "registration", "claim": "登记状态：存续"}],
+        "risks": [], "open_questions": [],
+    }
+    text = _render_report_for_llm("named", report)
+    assert "登记状态：存续" in text                  # 事实仍在
+    assert "采购批准或风险结论" not in text          # 结论式表述不进输入
+
+
 def test_polisher_streams_tokens_from_client():
     polisher = build_deepseek_polisher(client=_FakeClient())
     tokens = list(polisher("graph", _graph_report()))
@@ -42,3 +68,10 @@ def test_polisher_streams_tokens_from_client():
 def test_polisher_none_without_key(monkeypatch):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     assert build_deepseek_polisher() is None
+
+
+def test_polisher_converts_literal_newline_to_real():
+    polisher = build_deepseek_polisher(client=_LiteralNlClient())
+    text = "".join(polisher("named", {"supplier_name": "甲公司"}))
+    assert "\\n" not in text       # 字面反斜杠n 已清理
+    assert "\n" in text            # 变成真换行
