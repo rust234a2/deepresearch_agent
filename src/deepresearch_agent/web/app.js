@@ -73,12 +73,21 @@
       return;
     }
     sessions.forEach((item) => {
-      const button = el("button", "conversation" + (item.session_id === sessionId ? " active" : ""));
+      const row = el("div", "conversation-row" + (item.session_id === sessionId ? " active" : ""));
+      const button = el("button", "conversation");
       button.type = "button";
       button.appendChild(el("span", "conversation-title", item.title));
       button.appendChild(el("span", "conversation-time", formatTime(item.updated_at)));
       button.addEventListener("click", () => openSession(item.session_id));
-      conversations.appendChild(button);
+      const remove = el("button", "conversation-delete", "删除");
+      remove.type = "button";
+      remove.title = "删除此对话";
+      remove.setAttribute("aria-label", "删除对话：" + item.title);
+      remove.disabled = pending;
+      remove.addEventListener("click", () => deleteSession(item));
+      row.appendChild(button);
+      row.appendChild(remove);
+      conversations.appendChild(row);
     });
   }
   async function loadSessions() {
@@ -113,6 +122,31 @@
     setSidebarOpen(false);
     q.focus();
     scrollDown();
+  }
+
+  function saveTranscripts() {
+    try { localStorage.setItem(transcriptKey(), JSON.stringify(transcripts)); } catch (_) { /* 忽略本地存储失败 */ }
+  }
+  async function deleteSession(item) {
+    if (pending) return;
+    if (!confirm("删除“" + item.title + "”的全部对话记录？此操作无法恢复。")) return;
+    try {
+      const res = await fetch("/sessions/" + encodeURIComponent(item.session_id)
+        + "?user_id=" + encodeURIComponent(userId), { method: "DELETE" });
+      if (!res.ok) { const e = new Error("HTTP " + res.status); e.status = res.status; throw e; }
+      sessions = sessions.filter((x) => x.session_id !== item.session_id);
+      delete transcripts[item.session_id];
+      saveTranscripts();
+      if (sessionId === item.session_id) {
+        sessionId = null;
+        entries = [];
+        greeting();
+        q.focus();
+      }
+      renderSessions();
+    } catch (_) {
+      alert("删除对话失败，请重试。");
+    }
   }
 
   function lockIcon() {

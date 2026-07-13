@@ -114,3 +114,18 @@ class JsonSessionStore:
                 )
             )
         return sorted(summaries, key=lambda item: item.updated_at, reverse=True)
+
+    def delete(self, session_id: str, user_id: str) -> bool:
+        """删除属于当前用户的会话；不存在时返回 False。"""
+        _require_valid_id(session_id)
+        path = self._path(session_id)
+        if not path.exists():
+            return False
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if data.get("user_id") != user_id:
+            raise SessionOwnershipError(session_id)
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return False
+        return True

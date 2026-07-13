@@ -44,6 +44,13 @@ def test_web_includes_conversation_sidebar(company_database_path, tmp_path):
     assert 'id="newchat-side"' in r.text
 
 
+def test_web_script_includes_session_deletion(company_database_path, tmp_path):
+    r = _client(company_database_path, tmp_path).get("/static/app.js")
+
+    assert 'method: "DELETE"' in r.text
+    assert "deleteSession" in r.text
+
+
 def test_research_endpoint_unchanged(company_database_path, tmp_path):
     r = _client(company_database_path, tmp_path).post("/research", json={"question": ENTITY})
     assert r.status_code == 200

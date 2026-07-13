@@ -93,3 +93,25 @@ def test_list_for_user_returns_only_owned_sessions_in_recent_order(tmp_path):
         ("older", "较早的核验"),
     ]
     assert all(item.updated_at for item in summaries)
+
+
+def test_delete_removes_owned_session_and_preserves_other_sessions(tmp_path):
+    store = JsonSessionStore(tmp_path)
+    store.save(Session(user_id="alice", session_id="remove-me"))
+    store.save(Session(user_id="alice", session_id="keep-me"))
+
+    assert store.delete("remove-me", "alice") is True
+    assert store.load("remove-me", "alice") is None
+    assert store.load("keep-me", "alice") is not None
+    assert store.delete("remove-me", "alice") is False
+
+
+def test_delete_requires_owner_and_valid_session_id(tmp_path):
+    store = JsonSessionStore(tmp_path)
+    store.save(Session(user_id="alice", session_id="sess-1"))
+
+    with pytest.raises(SessionOwnershipError):
+        store.delete("sess-1", "bob")
+    with pytest.raises(InvalidSessionIdError):
+        store.delete("../../etc/passwd", "alice")
+    assert store.load("sess-1", "alice") is not None

@@ -45,6 +45,26 @@ def test_session_list_is_owned_and_uses_first_question_as_title(company_database
     assert r.json()[0]["updated_at"]
 
 
+def test_delete_session_requires_owner_and_removes_only_target(company_database_path, tmp_path):
+    client = _client(company_database_path, tmp_path)
+    first = client.post("/session/turn", json={"question": ENTITY, "user_id": "alice"}).json()["session_id"]
+    second = client.post("/session/turn", json={"question": ENTITY, "user_id": "alice"}).json()["session_id"]
+
+    forbidden = client.delete(f"/sessions/{first}", params={"user_id": "bob"})
+    assert forbidden.status_code == 404
+    deleted = client.delete(f"/sessions/{first}", params={"user_id": "alice"})
+    assert deleted.status_code == 204
+    assert [item["session_id"] for item in client.get("/sessions", params={"user_id": "alice"}).json()] == [second]
+    assert client.delete(f"/sessions/{first}", params={"user_id": "alice"}).status_code == 404
+
+
+def test_delete_session_rejects_invalid_id(company_database_path, tmp_path):
+    r = _client(company_database_path, tmp_path).delete(
+        "/sessions/invalid$id", params={"user_id": "alice"}
+    )
+    assert r.status_code == 400
+
+
 def test_second_turn_coreference(company_database_path, tmp_path):
     client = _client(company_database_path, tmp_path)
     r1 = client.post("/session/turn", json={"question": ENTITY, "user_id": "alice"})

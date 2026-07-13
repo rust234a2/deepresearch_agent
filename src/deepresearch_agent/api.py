@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, StringConstraints
@@ -233,6 +233,18 @@ def create_app(
     @application.get("/sessions", response_model=list[SessionSummaryResponse])
     def list_sessions(user_id: Question) -> list[SessionSummary]:
         return store.list_for_user(user_id)
+
+    @application.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+    def delete_session(session_id: str, user_id: Question) -> Response:
+        try:
+            deleted = store.delete(session_id, user_id)
+        except SessionOwnershipError:
+            raise HTTPException(status_code=404, detail="session not found")
+        except InvalidSessionIdError:
+            raise HTTPException(status_code=400, detail="invalid session_id")
+        if not deleted:
+            raise HTTPException(status_code=404, detail="session not found")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     application.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
