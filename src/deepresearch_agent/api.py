@@ -203,25 +203,17 @@ def create_app(
                     "title": report.get("supplier_name") or report.get("query", ""),
                     "recommendation": report["recommendation"],
                 })
-                conclusion = _RECOMMENDATION_TEXT.get(
-                    report["recommendation"], report["recommendation"]
-                )
                 used_llm = False
-                emitted = ""
                 if polisher is not None:
                     try:
-                        for tok in polisher(report_type, report, conclusion):
+                        for tok in polisher(report_type, report):
                             used_llm = True
-                            emitted += tok
                             yield _sse("message_delta", {"text": tok})
                     except Exception:
                         used_llm = False
                 if not used_llm:
                     for text in _report_message_chunks(report, report_type):
                         yield _sse("message_delta", {"text": text})
-                elif not _conclusion_present(emitted, report["recommendation"]):
-                    # 红线兜底：LLM 漏了或软化了结论 → 后端补发正确结论
-                    yield _sse("message_delta", {"text": f"\n\n结论：{conclusion}"})
                 yield _sse("complete", {"session_id": session.session_id})
 
         return StreamingResponse(
@@ -269,37 +261,15 @@ def _resolve_report(state) -> tuple[str, dict]:
     return mode, report.model_dump(mode="json")
 
 
-_RECOMMENDATION_TEXT = {
-    "insufficient_evidence": "证据不足，不能据此作出采购批准或风险结论。",
-    "conditional": "存在前提条件，须人工复核。",
-    "approve": "通过。",
-    "reject": "不通过。",
-}
-
-
-_RECOMMENDATION_KEYWORD = {
-    "insufficient_evidence": "证据不足",
-    "conditional": "前提条件",
-    "reject": "不通过",
-}
-
-
-def _conclusion_present(text: str, recommendation: str) -> bool:
-    """红线校验：LLM 输出是否如实包含了结论关键词（未软化/未漏）。缺则后端补发。"""
-    keyword = _RECOMMENDATION_KEYWORD.get(recommendation)
-    return True if keyword is None else keyword in text
-
-
 def _report_message_chunks(report: dict, report_type: str):
-    rec = _RECOMMENDATION_TEXT.get(report["recommendation"], report["recommendation"])
     if report_type in ("named", "unresolved"):
-        sections = [f"{report['supplier_name']}\n\n结论：{rec}", report.get("summary", "")]
+        sections = [report["supplier_name"], report.get("summary", "")]
     elif report_type == "scope":
-        head = f"经营范围语义检索：{report['query']}\n\n结论：{rec}"
+        head = f"经营范围语义检索：{report['query']}"
         lines = [f"· {c['legal_name']}（{c['top_score']:.2f}）" for c in report.get("candidates", [])]
         sections = [head, report.get("summary", ""), "候选企业：\n" + "\n".join(lines) if lines else ""]
     else:  # graph
-        head = f"股权关系检索：{report['query']}\n\n结论：{rec}"
+        head = f"股权关系检索：{report['query']}"
         cand = [f"· {c['legal_name']}｜最终控制人：{'、'.join(c.get('ultimate_controllers') or []) or '—'}"
                 for c in report.get("candidates", [])]
         clue = [f"· {s['controller_name']} → {'、'.join(s.get('controlled_companies') or [])}（{s['note']}）"

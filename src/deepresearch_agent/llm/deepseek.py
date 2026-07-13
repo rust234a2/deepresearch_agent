@@ -63,19 +63,14 @@ _PRESENTER_SYSTEM_PROMPT = (
     "2. 绝不推断产能、交期、质量认证或风险；经营范围按原文，不结构化为产品。\n"
     "3. 保留所有企业名、统一社会信用代码、控制人姓名的原文，不改写。\n"
     "4. 围标/共享控制人线索必须标注「线索级·须人工复核」，绝不作控制关系或围标认定。\n"
-    "5. 输入给出了「结论」。你必须在开头原样陈述该结论一次，一字不改、绝不软化"
-    "（例如不得把「证据不足」改写成「无风险」「可通过」），且全文只出现这一次结论。\n"
-    "6. 只输出正文，不加额外建议、不加评论。\n"
-    "7. 换行请直接输出真实换行，绝不要输出字面的反斜杠加 n。"
+    "5. 只输出正文，不加额外建议、不加评论。\n"
+    "6. 换行请直接输出真实换行，绝不要输出字面的反斜杠加 n。"
 )
 
 
-def _render_report_for_llm(report_type: str, report: dict, conclusion: str = "") -> str:
-    # 结论作为"须原样陈述"的输入交 LLM（纯 LLM 呈现，不再后端硬发）。刻意不传 summary 与 risks：
-    # writer 的这两个字段也含结论式表述，会导致 LLM 重复写结论；数据缺口由 open_questions 承载。
+def _render_report_for_llm(report_type: str, report: dict) -> str:
+    # 刻意不传 summary 与 risks：它们可能含固定结论式表述；数据缺口由 open_questions 承载。
     lines: list[str] = []
-    if conclusion:
-        lines.append(f"结论（请在开头原样陈述，一字不改、不得软化）：{conclusion}")
     if report_type in ("named", "unresolved"):
         lines.append(f"企业：{report.get('supplier_name', '')}")
         for ev in report.get("evidence_table", []):
@@ -113,14 +108,14 @@ def build_deepseek_polisher(
             return None
         client = OpenAI(api_key=api_key, base_url=base_url)
 
-    def stream_presentation(report_type: str, report: dict, conclusion: str = "") -> Iterator[str]:
+    def stream_presentation(report_type: str, report: dict) -> Iterator[str]:
         response = client.chat.completions.create(
             model=model,
             temperature=0,
             stream=True,
             messages=[
                 {"role": "system", "content": _PRESENTER_SYSTEM_PROMPT},
-                {"role": "user", "content": _render_report_for_llm(report_type, report, conclusion)},
+                {"role": "user", "content": _render_report_for_llm(report_type, report)},
             ],
         )
         # DeepSeek 偶尔吐字面反斜杠n。反斜杠可能被拆在两个 token 里（\ 在前、n 在后），

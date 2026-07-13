@@ -16,37 +16,32 @@ def _client(db, tmp, **kw):
     return TestClient(app)
 
 
-def _fake_polisher(report_type, report, conclusion=""):
-    # 忠实 LLM：原样陈述给定结论一次
+def _fake_polisher(report_type, report):
     yield "【LLM呈现】"
-    yield conclusion
     yield report.get("supplier_name") or report.get("query", "")
 
 
-def _softening_polisher(report_type, report, conclusion=""):
-    # 违规 LLM：软化/漏掉结论（不含"证据不足"）
-    yield "该企业一切正常，可以通过。"
+def _brief_polisher(report_type, report):
+    yield "【简短呈现】"
 
 
-def test_stream_uses_polisher_no_duplicate_conclusion(company_database_path, tmp_path):
+def test_stream_uses_polisher_without_forced_conclusion_banner(company_database_path, tmp_path):
     client = _client(company_database_path, tmp_path, polisher=_fake_polisher)
     with client.stream("POST", "/session/turn/stream",
                        json={"question": "示例科技股份有限公司", "user_id": "alice"}) as r:
         body = "".join(r.iter_text())
     assert "event: complete" in body
     assert "【LLM呈现】" in body           # 走了 LLM
-    # 纯 LLM 呈现：结论由 LLM 陈述一次，后端不再硬发 → 全文只出现一次
     reassembled = _reassemble(body)
-    assert reassembled.count("证据不足") == 1
+    assert "结论：证据不足" not in reassembled
 
 
-def test_stream_redline_net_appends_when_llm_softens(company_database_path, tmp_path):
-    # LLM 软化了结论 → 后端兜底补发正确结论
-    client = _client(company_database_path, tmp_path, polisher=_softening_polisher)
+def test_stream_does_not_append_recommendation_when_polisher_omits_it(company_database_path, tmp_path):
+    client = _client(company_database_path, tmp_path, polisher=_brief_polisher)
     with client.stream("POST", "/session/turn/stream",
                        json={"question": "示例科技股份有限公司", "user_id": "alice"}) as r:
         body = "".join(r.iter_text())
-    assert "证据不足" in _reassemble(body)   # 兜底补上了红线结论
+    assert _reassemble(body) == "【简短呈现】"
 
 
 def test_stream_falls_back_without_polisher(company_database_path, tmp_path):
@@ -56,11 +51,11 @@ def test_stream_falls_back_without_polisher(company_database_path, tmp_path):
         body = "".join(r.iter_text())
     assert "event: report_start" in body and "event: complete" in body
     assert "【LLM呈现】" not in body         # 未走 LLM，走确定性兜底
-    assert "证据不足" in _reassemble(body)   # 兜底文本含结论
+    assert "结论：证据不足" not in _reassemble(body)
 
 
 def test_stream_polisher_exception_falls_back(company_database_path, tmp_path):
-    def _boom(report_type, report, conclusion=""):
+    def _boom(report_type, report):
         raise RuntimeError("llm down")
         yield  # pragma: no cover
     client = _client(company_database_path, tmp_path, polisher=_boom)
@@ -68,7 +63,7 @@ def test_stream_polisher_exception_falls_back(company_database_path, tmp_path):
                        json={"question": "示例科技股份有限公司", "user_id": "alice"}) as r:
         body = "".join(r.iter_text())
     assert "event: complete" in body        # 异常回退、不崩
-    assert "证据不足" in _reassemble(body)   # 结论仍在（确定性兜底）
+    assert "结论：证据不足" not in _reassemble(body)
 
 
 class _ScopeRetriever:

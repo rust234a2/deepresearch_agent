@@ -51,15 +51,14 @@ def _graph_report():
     }
 
 
-def test_render_includes_facts_and_given_conclusion():
-    text = _render_report_for_llm("graph", _graph_report(), "证据不足，不能据此作出采购结论。")
+def test_render_includes_graph_facts_without_recommendation_conclusion():
+    text = _render_report_for_llm("graph", _graph_report())
     assert "丙公司" in text and "张三" in text
-    assert "证据不足" in text            # 结论作为"须原样陈述"传给 LLM
-    assert "原样陈述" in text            # 带明确指令
+    assert "证据不足" not in text
 
 
-def test_render_named_drops_summary_and_risks_keeps_only_given_conclusion():
-    # summary 与 risks 都含结论式表述，不得进 LLM 输入；只有显式传入的 conclusion 进入
+def test_render_named_drops_summary_and_risks():
+    # summary 与 risks 都可能含结论式表述，不得进入 LLM 输入。
     report = {
         "recommendation": "insufficient_evidence",
         "supplier_name": "亚联机械股份有限公司",

@@ -65,6 +65,8 @@
 
 30. **网页会话检索器注入修复**：发现 `create_app.graph_for()` 仅以 `build_graph(domain_pack, repository)` 建图，导致网页会话端点即使有本地 FAISS/Neo4j 也永远只走 named/unresolved。现改为对 `/session/turn` 与 `/session/turn/stream` 按领域和检索开关缓存建图：注入 `_build_scope_retriever(database_path, index_path)`、`_build_graph_searcher(database_path, scope_retriever)` 和复杂度 LLM，默认启用 scope/graph；`/research` 保持无检索 `SupplierReport` 契约。非流式会话响应的 `report` 放宽为 named/scope/graph 三类，避免能力查询 500；缺 Neo4j 仍由图层回退 scope。回归测试覆盖 scope 注入与 `/research` 不构建检索器，真实库以“哪些企业能做木材加工机械”验证普通与 SSE 会话均返回 scope 报告（10 个候选）。
 
+31. **网页流式对话去除固定结论横幅**：`recommendation="insufficient_evidence"` 继续保留在结构化报告中，作为当前数据源不足以支持采购判断的内部语义；但 `/session/turn/stream` 不再向用户每轮强制追加「结论：证据不足，不能据此作出采购批准或风险结论」。DeepSeek 呈现 prompt 与确定性回退文本均仅展示已检索事实、候选、线索和待接入数据，避免固定结论淹没正常查询结果。
+
 ## 本地数据状态
 
 目录：
