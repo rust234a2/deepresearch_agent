@@ -36,7 +36,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body { margin: 0; font-family: var(--sans); background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased; line-height: 1.6; }
-.app-shell { display: flex; height: 100vh; max-width: 1360px; margin: 0 auto; background: var(--bg); }
+.app-shell { display: flex; width: 100%; height: 100vh; margin: 0; background: var(--bg); }
 .app { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; height: 100vh; background: var(--bg); }
 
 /* 对话侧边栏 */
