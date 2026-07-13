@@ -21,6 +21,19 @@ class _LiteralNlClient:
     chat = type("Chat", (), {"completions": _LiteralNlCompletions()})()
 
 
+class _SplitNlStream:
+    # 字面 \n 被拆在两个 token 里：反斜杠在前一 token 末尾，n 在后一 token 开头
+    def __iter__(self): return iter([_FakeChunk("甲公司\\"), _FakeChunk("n乙公司")])
+
+
+class _SplitNlCompletions:
+    def create(self, **kw): return _SplitNlStream()
+
+
+class _SplitNlClient:
+    chat = type("Chat", (), {"completions": _SplitNlCompletions()})()
+
+
 class _FakeCompletions:
     def create(self, **kw): return _FakeStream()
 
@@ -38,24 +51,35 @@ def _graph_report():
     }
 
 
-def test_render_includes_facts_excludes_conclusion():
-    text = _render_report_for_llm("graph", _graph_report())
+def test_render_includes_facts_and_given_conclusion():
+    text = _render_report_for_llm("graph", _graph_report(), "证据不足，不能据此作出采购结论。")
     assert "丙公司" in text and "张三" in text
-    assert "证据不足" not in text  # 结论句不进 LLM 输入
+    assert "证据不足" in text            # 结论作为"须原样陈述"传给 LLM
+    assert "原样陈述" in text            # 带明确指令
 
 
-def test_render_named_drops_conclusion_bearing_summary():
-    # summary 含结论式表述时，绝不进 LLM 输入（否则 LLM 会复述、与后端硬发的结论重复）
+def test_render_named_drops_summary_and_risks_keeps_only_given_conclusion():
+    # summary 与 risks 都含结论式表述，不得进 LLM 输入；只有显式传入的 conclusion 进入
     report = {
         "recommendation": "insufficient_evidence",
         "supplier_name": "亚联机械股份有限公司",
         "summary": "已完成核验；现有数据不足以作出采购批准或风险结论。",
         "evidence_table": [{"dimension": "registration", "claim": "登记状态：存续"}],
-        "risks": [], "open_questions": [],
+        "risks": ["当前数据源不包含制裁、司法数据，不能据此作出采购批准或风险结论。"],
+        "open_questions": ["接入制裁和监管名单数据。"],
     }
-    text = _render_report_for_llm("named", report)
+    text = _render_report_for_llm("named", report)  # 不传 conclusion
     assert "登记状态：存续" in text                  # 事实仍在
-    assert "采购批准或风险结论" not in text          # 结论式表述不进输入
+    assert "接入制裁和监管名单数据" in text          # 待接入数据仍在
+    assert "采购批准或风险结论" not in text          # summary/risks 的结论式表述不进输入
+
+
+def test_polisher_cleans_literal_newline_split_across_tokens():
+    polisher = build_deepseek_polisher(client=_SplitNlClient())
+    text = "".join(polisher("named", {"supplier_name": "甲公司"}))
+    assert "\\n" not in text       # 跨 token 的字面反斜杠n 也被清理
+    assert "\n" in text            # 变真换行
+    assert "甲公司" in text and "乙公司" in text
 
 
 def test_polisher_streams_tokens_from_client():

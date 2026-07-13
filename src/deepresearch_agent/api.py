@@ -180,18 +180,25 @@ def create_app(
                     "title": report.get("supplier_name") or report.get("query", ""),
                     "recommendation": report["recommendation"],
                 })
-                yield _sse("message_delta", {"text": _conclusion_line(report)})
+                conclusion = _RECOMMENDATION_TEXT.get(
+                    report["recommendation"], report["recommendation"]
+                )
                 used_llm = False
+                emitted = ""
                 if polisher is not None:
                     try:
-                        for tok in polisher(report_type, report):
+                        for tok in polisher(report_type, report, conclusion):
                             used_llm = True
+                            emitted += tok
                             yield _sse("message_delta", {"text": tok})
                     except Exception:
                         used_llm = False
                 if not used_llm:
                     for text in _report_message_chunks(report, report_type):
                         yield _sse("message_delta", {"text": text})
+                elif not _conclusion_present(emitted, report["recommendation"]):
+                    # 红线兜底：LLM 漏了或软化了结论 → 后端补发正确结论
+                    yield _sse("message_delta", {"text": f"\n\n结论：{conclusion}"})
                 yield _sse("complete", {"session_id": session.session_id})
 
         return StreamingResponse(
@@ -235,9 +242,17 @@ _RECOMMENDATION_TEXT = {
 }
 
 
-def _conclusion_line(report: dict) -> str:
-    rec = _RECOMMENDATION_TEXT.get(report["recommendation"], report["recommendation"])
-    return f"\n\n结论：{rec}"
+_RECOMMENDATION_KEYWORD = {
+    "insufficient_evidence": "证据不足",
+    "conditional": "前提条件",
+    "reject": "不通过",
+}
+
+
+def _conclusion_present(text: str, recommendation: str) -> bool:
+    """红线校验：LLM 输出是否如实包含了结论关键词（未软化/未漏）。缺则后端补发。"""
+    keyword = _RECOMMENDATION_KEYWORD.get(recommendation)
+    return True if keyword is None else keyword in text
 
 
 def _report_message_chunks(report: dict, report_type: str):
