@@ -30,6 +30,19 @@ def test_first_turn_returns_session_id(company_database_path, tmp_path):
     assert body["report"]["supplier_name"] == ENTITY
 
 
+def test_session_list_is_owned_and_uses_first_question_as_title(company_database_path, tmp_path):
+    client = _client(company_database_path, tmp_path)
+    client.post("/session/turn", json={"question": ENTITY, "user_id": "alice"})
+    client.post("/session/turn", json={"question": ENTITY, "user_id": "bob"})
+
+    r = client.get("/sessions", params={"user_id": "alice"})
+
+    assert r.status_code == 200
+    assert len(r.json()) == 1
+    assert r.json()[0]["title"] == ENTITY
+    assert r.json()[0]["updated_at"]
+
+
 def test_second_turn_coreference(company_database_path, tmp_path):
     client = _client(company_database_path, tmp_path)
     r1 = client.post("/session/turn", json={"question": ENTITY, "user_id": "alice"})

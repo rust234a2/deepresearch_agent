@@ -28,6 +28,7 @@ from deepresearch_agent.memory.store import (
     InvalidSessionIdError,
     JsonSessionStore,
     SessionOwnershipError,
+    SessionSummary,
 )
 from deepresearch_agent.state import SupplierReport
 
@@ -54,6 +55,12 @@ class SessionTurnRequest(BaseModel):
 class SessionTurnResponse(BaseModel):
     session_id: str
     report: SupplierReport
+
+
+class SessionSummaryResponse(BaseModel):
+    session_id: str
+    title: str
+    updated_at: str
 
 
 _NODE_PROGRESS = {
@@ -125,6 +132,8 @@ def create_app(
             memory=memory_service,
             enable_memory=True,
         )
+        if session.title is None:
+            session.title = request.question
         store.save(session)
         if state.report is None:
             raise RuntimeError("session turn completed without a report")
@@ -162,6 +171,8 @@ def create_app(
                     })
                     continue
 
+                if session.title is None:
+                    session.title = request.question
                 store.save(session)
                 report_type, report = _resolve_report(state)
                 yield _sse("report_start", {
@@ -188,6 +199,10 @@ def create_app(
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @application.get("/sessions", response_model=list[SessionSummaryResponse])
+    def list_sessions(user_id: Question) -> list[SessionSummary]:
+        return store.list_for_user(user_id)
 
     application.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 

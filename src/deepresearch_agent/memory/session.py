@@ -29,6 +29,8 @@ def contains_anaphora(query: str) -> bool:
 class Session:
     user_id: str
     session_id: str
+    # 会话标题只用于对话管理界面；实体缓冲仍是 Agent 多轮指代的唯一上下文。
+    title: str | None = None
     recent_entities: deque = field(default_factory=lambda: deque(maxlen=5))
 
     def note_entity(self, resolution: CompanyResolution) -> None:

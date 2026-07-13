@@ -78,3 +78,18 @@ def test_cross_process_persistence_new_store_instance(tmp_path):
     # 另一个 store 实例（模拟另一进程）能读回
     loaded = JsonSessionStore(tmp_path).load("sess-1", "alice")
     assert [r.unified_social_credit_code for r in loaded.recent_entities] == ["C1"]
+
+
+def test_list_for_user_returns_only_owned_sessions_in_recent_order(tmp_path):
+    store = JsonSessionStore(tmp_path)
+    store.save(Session(user_id="alice", session_id="older", title="较早的核验"))
+    store.save(Session(user_id="bob", session_id="hidden", title="不应泄露"))
+    store.save(Session(user_id="alice", session_id="newer", title="最新的核验"))
+
+    summaries = store.list_for_user("alice")
+
+    assert [(item.session_id, item.title) for item in summaries] == [
+        ("newer", "最新的核验"),
+        ("older", "较早的核验"),
+    ]
+    assert all(item.updated_at for item in summaries)
