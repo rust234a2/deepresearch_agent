@@ -1,11 +1,14 @@
 from fastapi.testclient import TestClient
 
 from deepresearch_agent.api import create_app
+from deepresearch_agent.rag.retriever import ScopeHit
 from deepresearch_agent.memory.service import FakeMemoryBackend, MemoryService
 from deepresearch_agent.memory.store import JsonSessionStore
 
 
 def _client(db, tmp, **kw):
+    kw.setdefault("enable_scope", False)
+    kw.setdefault("enable_graph", False)
     app = create_app(
         database_path=db, memory=MemoryService(FakeMemoryBackend()),
         session_store=JsonSessionStore(tmp), **kw,
@@ -66,6 +69,121 @@ def test_stream_polisher_exception_falls_back(company_database_path, tmp_path):
         body = "".join(r.iter_text())
     assert "event: complete" in body        # 异常回退、不崩
     assert "证据不足" in _reassemble(body)   # 结论仍在（确定性兜底）
+
+
+class _ScopeRetriever:
+    def search(self, query, k):
+        return [
+            ScopeHit(
+                unified_social_credit_code="91330000123456789X",
+                legal_name="示例科技股份有限公司",
+                section_label="一般项目",
+                text="注塑成型",
+                score=0.95,
+            )
+        ]
+
+
+def test_web_session_injects_scope_retriever_for_capability_query(
+    company_database_path, tmp_path, monkeypatch
+):
+    from deepresearch_agent.agents import graph as graph_module
+
+    calls = {"scope": 0, "graph": 0}
+
+    def build_scope(database_path, index_path):
+        calls["scope"] += 1
+        return _ScopeRetriever()
+
+    def build_graph(database_path, scope_retriever):
+        calls["graph"] += 1
+        return None
+
+    monkeypatch.setattr(graph_module, "_build_scope_retriever", build_scope)
+    monkeypatch.setattr(graph_module, "_build_graph_searcher", build_graph)
+    client = _client(
+        company_database_path,
+        tmp_path,
+        polisher=None,
+        enable_scope=True,
+        enable_graph=True,
+    )
+
+    response = client.post(
+        "/session/turn", json={"question": "哪些企业能做注塑成型", "user_id": "alice"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["report"]["query"] == "哪些企业能做注塑成型"
+    assert response.json()["report"]["candidates"][0]["legal_name"] == "示例科技股份有限公司"
+    assert calls == {"scope": 1, "graph": 1}
+
+
+def test_web_session_injects_graph_searcher_for_relationship_query(
+    company_database_path, tmp_path, monkeypatch
+):
+    from deepresearch_agent.agents import graph as graph_module
+    from deepresearch_agent.graph_retrieval import HybridContext, SeedContext
+
+    def build_scope(database_path, index_path):
+        return _ScopeRetriever()
+
+    def build_graph(database_path, scope_retriever):
+        def search(query):
+            return HybridContext(
+                query=query,
+                seeds=[
+                    SeedContext(
+                        code="X",
+                        name="示例科技股份有限公司",
+                        score=0.95,
+                        controllers=[],
+                        neighbors=[],
+                    )
+                ],
+                shared_controllers=[],
+            )
+
+        return search
+
+    monkeypatch.setattr(graph_module, "_build_scope_retriever", build_scope)
+    monkeypatch.setattr(graph_module, "_build_graph_searcher", build_graph)
+    client = _client(
+        company_database_path,
+        tmp_path,
+        polisher=None,
+        enable_scope=True,
+        enable_graph=True,
+    )
+
+    response = client.post(
+        "/session/turn", json={"question": "哪些做注塑的供应商互相关联", "user_id": "alice"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["report"]["query"] == "哪些做注塑的供应商互相关联"
+    assert response.json()["report"]["candidates"][0]["legal_name"] == "示例科技股份有限公司"
+
+
+def test_research_endpoint_does_not_build_web_retrievers(company_database_path, tmp_path, monkeypatch):
+    from deepresearch_agent.agents import graph as graph_module
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("/research must not build web retrievers")
+
+    monkeypatch.setattr(graph_module, "_build_scope_retriever", unexpected)
+    monkeypatch.setattr(graph_module, "_build_graph_searcher", unexpected)
+    client = _client(
+        company_database_path,
+        tmp_path,
+        polisher=None,
+        enable_scope=True,
+        enable_graph=True,
+    )
+
+    response = client.post("/research", json={"question": "核验示例科技股份有限公司"})
+
+    assert response.status_code == 200
 
 
 def _reassemble(sse_body: str) -> str:

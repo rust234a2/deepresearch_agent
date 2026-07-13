@@ -12,6 +12,8 @@ def _client(company_database_path, tmp_path):
         database_path=company_database_path,
         memory=MemoryService(FakeMemoryBackend()),
         session_store=JsonSessionStore(tmp_path),
+        enable_scope=False,
+        enable_graph=False,
     )
     return TestClient(app)
 

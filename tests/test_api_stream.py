@@ -10,6 +10,8 @@ def test_stream_turn_emits_progress_and_incremental_report(company_database_path
         database_path=company_database_path,
         memory=MemoryService(FakeMemoryBackend()),
         session_store=JsonSessionStore(tmp_path),
+        enable_scope=False,
+        enable_graph=False,
     )
     client = TestClient(app)
 

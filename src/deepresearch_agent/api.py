@@ -30,7 +30,7 @@ from deepresearch_agent.memory.store import (
     SessionOwnershipError,
     SessionSummary,
 )
-from deepresearch_agent.state import SupplierReport
+from deepresearch_agent.state import GraphSearchReport, ScopeSearchReport, SupplierReport
 
 
 Question = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -54,7 +54,7 @@ class SessionTurnRequest(BaseModel):
 
 class SessionTurnResponse(BaseModel):
     session_id: str
-    report: SupplierReport
+    report: SupplierReport | ScopeSearchReport | GraphSearchReport
 
 
 class SessionSummaryResponse(BaseModel):
@@ -80,10 +80,13 @@ def create_app(
     memory: MemoryService | None = None,
     session_store: JsonSessionStore | None = None,
     polisher: object = "__default__",
+    index_path: str | Path = graph_module.DEFAULT_INDEX_PATH,
+    enable_scope: bool = True,
+    enable_graph: bool = True,
 ) -> FastAPI:
     application = FastAPI(title="DeepResearch Agent", version="0.1.0")
     repository = CompanyRepository(database_path)
-    compiled_graphs: dict[str, object] = {}
+    compiled_graphs: dict[tuple[str, bool, bool], object] = {}
     memory_service = memory if memory is not None else MemoryService(build_memory_backend())
     store = session_store if session_store is not None else JsonSessionStore(DEFAULT_SESSIONS_DIR)
     if polisher == "__default__":
@@ -97,11 +100,32 @@ def create_app(
     except Exception:
         logger.info("[graph] Neo4j backend: unavailable (fallback to scope)")
 
-    def graph_for(domain: str) -> object:
-        if domain not in compiled_graphs:
+    def graph_for(domain: str, *, enable_retrieval: bool = False) -> object:
+        scope_active = enable_retrieval and enable_scope
+        graph_active = enable_retrieval and enable_graph
+        cache_key = (domain, scope_active, graph_active)
+        if cache_key not in compiled_graphs:
             domain_pack = load_domain_pack(Path("domains") / domain / "domain.yaml")
-            compiled_graphs[domain] = graph_module.build_graph(domain_pack, repository)
-        return compiled_graphs[domain]
+            scope_retriever = (
+                graph_module._build_scope_retriever(database_path, index_path)
+                if (scope_active or graph_active)
+                else None
+            )
+            graph_searcher = (
+                graph_module._build_graph_searcher(database_path, scope_retriever)
+                if graph_active
+                else None
+            )
+            compiled_graphs[cache_key] = graph_module.build_graph(
+                domain_pack,
+                repository,
+                scope_retriever=scope_retriever,
+                graph_searcher=graph_searcher,
+                llm=graph_module._build_llm() if enable_retrieval else None,
+                scope_enabled=scope_active,
+                graph_enabled=graph_active,
+            )
+        return compiled_graphs[cache_key]
 
     @application.post("/research", response_model=SupplierReport)
     def research(request: ResearchRequest) -> SupplierReport:
@@ -125,7 +149,7 @@ def create_app(
             session = loaded or Session(user_id=user_id, session_id=request.session_id)
 
         state = execute_turn(
-            graph_for(request.domain),
+            graph_for(request.domain, enable_retrieval=True),
             request.question,
             request.domain,
             session=session,
@@ -135,9 +159,8 @@ def create_app(
         if session.title is None:
             session.title = request.question
         store.save(session)
-        if state.report is None:
-            raise RuntimeError("session turn completed without a report")
-        return SessionTurnResponse(session_id=session.session_id, report=state.report)
+        _, report = _resolve_report(state)
+        return SessionTurnResponse(session_id=session.session_id, report=report)
 
     @application.post("/session/turn/stream")
     def session_turn_stream(request: SessionTurnRequest) -> StreamingResponse:
@@ -157,7 +180,7 @@ def create_app(
             yield _sse("session", {"session_id": session.session_id})
             yield _sse("progress", {"stage": "context", "message": "正在准备本轮对话上下文…"})
             for node_name, state in iter_execute_turn(
-                graph_for(request.domain),
+                graph_for(request.domain, enable_retrieval=True),
                 request.question,
                 request.domain,
                 session=session,

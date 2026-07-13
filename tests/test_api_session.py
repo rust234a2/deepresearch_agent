@@ -13,6 +13,8 @@ def _client_with_store(db_path, store_dir):
         database_path=db_path,
         memory=MemoryService(FakeMemoryBackend()),
         session_store=JsonSessionStore(store_dir),
+        enable_scope=False,
+        enable_graph=False,
     )
     return TestClient(app)
 

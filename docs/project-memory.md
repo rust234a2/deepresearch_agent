@@ -59,6 +59,8 @@
 
 29. **网页 LLM 流式呈现（DeepSeek）+ Neo4j 兜底**：流式端点 `/session/turn/stream` 的**呈现层**从确定性切块换成 **DeepSeek 流式生成**（`llm/deepseek.py::build_deepseek_polisher`，复用 classifier 的 OpenAI client 模式 + `stream=True` 逐 token）。三种报告（named/scope/graph）经 `_resolve_report` 定稿后交 LLM 呈现。**红线守法**：①LLM 只呈现 writer 已定稿报告，`_render_report_for_llm` 把报告转输入文本时**剔除结论**；②`recommendation` 结论句由后端 `_conclusion_line` 在 LLM 正文前**确定性硬发一次**（纵深防御，LLM 改不了结论）；③约束 `_PRESENTER_SYSTEM_PROMPT`（只复述、不推断、保留原文、围标标线索级）。**降级**：无 `DEEPSEEK_API_KEY`→polisher=None→回退 `_report_message_chunks`；LLM 一上来抛异常→回退；中途异常→保留已产出（避免重复正文）。`create_app(polisher="__default__")` 哨兵区分「测试传 None 禁用」与「默认自建」。**数据越境豁免范围扩大到呈现层**（全部检索结果进 prompt，用户明确决定，与记忆层同级；核心红线文本仍在、仅本线豁免）。**Neo4j 兜底**：`from_env` 默认密码 `""`→`devpassword`（对齐 docker-compose，仅本地），`create_app` 启动经 `logging` 打印 `[graph] Neo4j backend: connected/unavailable`（不再静默降级；此前查出裸启动 graph_searcher 恒 None、网页版 GraphRAG 从不走）。测试：`test_deepseek_polisher.py`（fake client 零网络）+ `test_api_stream_retrieval.py`（fake polisher/None/异常三路）+ `test_neo4j_backend_env.py`（fake 驱动断言密码），全套 **258 passed**；真链路标 `@pytest.mark.llm`。前端零改动（token 流形状同 `message_delta`）。graph_viz 侧边图暂缓。
 
+30. **网页会话检索器注入修复**：发现 `create_app.graph_for()` 仅以 `build_graph(domain_pack, repository)` 建图，导致网页会话端点即使有本地 FAISS/Neo4j 也永远只走 named/unresolved。现改为对 `/session/turn` 与 `/session/turn/stream` 按领域和检索开关缓存建图：注入 `_build_scope_retriever(database_path, index_path)`、`_build_graph_searcher(database_path, scope_retriever)` 和复杂度 LLM，默认启用 scope/graph；`/research` 保持无检索 `SupplierReport` 契约。非流式会话响应的 `report` 放宽为 named/scope/graph 三类，避免能力查询 500；缺 Neo4j 仍由图层回退 scope。回归测试覆盖 scope 注入与 `/research` 不构建检索器，真实库以“哪些企业能做木材加工机械”验证普通与 SSE 会话均返回 scope 报告（10 个候选）。
+
 ## 本地数据状态
 
 目录：

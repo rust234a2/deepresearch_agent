@@ -103,7 +103,7 @@ flowchart LR
 - **critic**：计划维度减已覆盖维度算缺口，非空且未超预算（`iteration < 3`）回 researcher（实际只有 `named` 路径会累积维度、可能回环）。
 - **writer = 生成层**：唯一报告生成者，按 `retrieval_mode` 产出 `SupplierReport`(named/unresolved) / `ScopeSearchReport`(scope) / `GraphSearchReport`(graph)，所有 summary/open_questions/`insufficient_evidence`/人工复核提示都在此生成；检索器不可用时产出对应"不可用"报告。`state.degradations` 被插入报告 `open_questions` 最前面，让降级过程可见。
 
-`enable_scope`/`enable_graph` 由 CLI 控制（`--graph` 从"强制图检索"变为"允许图检索，由复杂度决定用不用"）；`/research` API 不启用检索、形状不变。旧的 `scope_search_node`/`graph_search_node` 独立节点与 planner 后条件路由已撤销，检索/生成职责收口到 researcher/writer 两层。
+`enable_scope`/`enable_graph` 由 CLI 和网页会话端点控制（`--graph` 从"强制图检索"变为"允许图检索，由复杂度决定用不用"）；`/research` API 不启用检索、形状不变。旧的 `scope_search_node`/`graph_search_node` 独立节点与 planner 后条件路由已撤销，检索/生成职责收口到 researcher/writer 两层。
 
 ## 经营范围语义检索（`rag/`）
 
@@ -127,11 +127,11 @@ flowchart LR
 
 - CLI 支持 `--database` / `--index`；默认 `enable_scope=True`，按问题类型自动分流（指名企业→核验，能力描述→scope 检索）。`cli chat` 子命令承载多轮对话。
 - 独立 `rag.cli` 直接暴露 `ScopeRetriever`（不经 Agent 编排）。
-- FastAPI 通过 `create_app(database_path, memory=, session_store=)` 注入数据库/记忆/会话存储，启动时按领域缓存编译图；模块级 `app` 使用默认路径。
-- API 响应继续使用 `SupplierReport`，保持现有外形（`enable_scope` 默认关，不暴露 scope）。
-- `POST /session/turn` 为有状态多轮端点：请求体 `user_id` 作 authenticated user（无鉴权层 stand-in），`session_id` 只寻址不授权；响应 `{session_id, report}`。
+- FastAPI 通过 `create_app(database_path, memory=, session_store=, index_path=, enable_scope=, enable_graph=)` 注入数据库/记忆/会话存储与检索配置，按领域和检索开关缓存编译图；模块级 `app` 使用默认路径。
+- `/research` 保持 `SupplierReport` 外形且不构建检索器；`/session/turn` 与 `/session/turn/stream` 默认注入 scope/graph 检索器，能力查询可返回 scope 或 graph 报告。
+- `POST /session/turn` 为有状态多轮端点：请求体 `user_id` 作 authenticated user（无鉴权层 stand-in），`session_id` 只寻址不授权；响应 `{session_id, report}`，其中 `report` 可为命名核验、scope 或 graph 报告。
 - **Web 聊天界面**（对外演示 Demo）：`GET /` 返 `web/index.html`、`/static` 挂 `StaticFiles` 托管 `web/{index.html,style.css,app.js}`；自包含 vanilla 页（零构建零 npm、无 CDN），发 `POST /session/turn` 后以「研究中…」加载态→结构化报告卡渲染 `SupplierReport`（recommendation 徽章四值映射、证据表带 `local://` 引用、待解问题=尚未接入数据源）；身份 `user_id` 存 localStorage、`session_id` 内存复用多轮指代。后端仅新增静态托管（`WEB_DIR=Path(__file__).parent/"web"`），端点逻辑不变。
-- **网页流式呈现（DeepSeek）**：`POST /session/turn/stream`（SSE）的呈现层走 `llm/deepseek.py::build_deepseek_polisher`（`stream=True` 逐 token）。三种报告经 `_resolve_report` 定稿后交 LLM 生成中文。**LLM 只呈现、不改结论**：`_render_report_for_llm` 转输入文本时剔除结论，`recommendation` 结论句由后端 `_conclusion_line` 在 LLM 正文前确定性硬发（纵深防御）；约束 `_PRESENTER_SYSTEM_PROMPT`（只复述/不推断/保留原文/围标标线索级）。降级：无 `DEEPSEEK_API_KEY`/LLM 异常→回退 `_report_message_chunks`。`create_app(polisher="__default__")` 哨兵可注入。数据越境经用户明确豁免（呈现层，与记忆层同级）。
+- **网页流式呈现（DeepSeek）**：`POST /session/turn/stream`（SSE）建图时注入 scope/graph 检索器，呈现层走 `llm/deepseek.py::build_deepseek_polisher`（`stream=True` 逐 token）。三种报告经 `_resolve_report` 定稿后交 LLM 生成中文。**LLM 只呈现、不改结论**：`_render_report_for_llm` 转输入文本时剔除结论，`recommendation` 结论句由后端 `_conclusion_line` 在 LLM 正文前确定性硬发（纵深防御）；约束 `_PRESENTER_SYSTEM_PROMPT`（只复述/不推断/保留原文/围标标线索级）。降级：无 `DEEPSEEK_API_KEY`/LLM 异常→回退 `_report_message_chunks`；Neo4j 不可用时由图层降级 scope。`create_app(polisher="__default__")` 哨兵可注入。数据越境经用户明确豁免（呈现层，与记忆层同级）。
 - **Neo4j 兜底**：`Neo4jBackend.from_env` 默认密码 `devpassword`（对齐 docker-compose，仅本地）；`create_app` 启动经 `logging` 打印 graph 后端连通性（`connected`/`unavailable`），不再静默降级。
 
 ## 后续能力
