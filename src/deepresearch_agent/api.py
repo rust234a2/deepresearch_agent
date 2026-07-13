@@ -19,6 +19,7 @@ from deepresearch_agent.agents.graph import (
 )
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.domain import load_domain_pack
+from deepresearch_agent.llm.deepseek import build_deepseek_polisher
 from deepresearch_agent.memory.config import build_memory_backend
 from deepresearch_agent.memory.service import MemoryService
 from deepresearch_agent.memory.session import Session
@@ -70,12 +71,15 @@ def create_app(
     database_path: str | Path = DEFAULT_DATABASE_PATH,
     memory: MemoryService | None = None,
     session_store: JsonSessionStore | None = None,
+    polisher: object = "__default__",
 ) -> FastAPI:
     application = FastAPI(title="DeepResearch Agent", version="0.1.0")
     repository = CompanyRepository(database_path)
     compiled_graphs: dict[str, object] = {}
     memory_service = memory if memory is not None else MemoryService(build_memory_backend())
     store = session_store if session_store is not None else JsonSessionStore(DEFAULT_SESSIONS_DIR)
+    if polisher == "__default__":
+        polisher = build_deepseek_polisher()
 
     def graph_for(domain: str) -> object:
         if domain not in compiled_graphs:
@@ -150,15 +154,24 @@ def create_app(
                     continue
 
                 store.save(session)
-                if state.report is None:
-                    raise RuntimeError("research graph completed without a report")
-                report = state.report.model_dump(mode="json")
+                report_type, report = _resolve_report(state)
                 yield _sse("report_start", {
-                    "supplier_name": report["supplier_name"],
+                    "report_type": report_type,
+                    "title": report.get("supplier_name") or report.get("query", ""),
                     "recommendation": report["recommendation"],
                 })
-                for text in _report_message_chunks(report, "named"):
-                    yield _sse("message_delta", {"text": text})
+                yield _sse("message_delta", {"text": _conclusion_line(report)})
+                used_llm = False
+                if polisher is not None:
+                    try:
+                        for tok in polisher(report_type, report):
+                            used_llm = True
+                            yield _sse("message_delta", {"text": tok})
+                    except Exception:
+                        used_llm = False
+                if not used_llm:
+                    for text in _report_message_chunks(report, report_type):
+                        yield _sse("message_delta", {"text": text})
                 yield _sse("complete", {"session_id": session.session_id})
 
         return StreamingResponse(
@@ -196,6 +209,11 @@ _RECOMMENDATION_TEXT = {
     "approve": "通过。",
     "reject": "不通过。",
 }
+
+
+def _conclusion_line(report: dict) -> str:
+    rec = _RECOMMENDATION_TEXT.get(report["recommendation"], report["recommendation"])
+    return f"\n\n结论：{rec}"
 
 
 def _report_message_chunks(report: dict, report_type: str):
