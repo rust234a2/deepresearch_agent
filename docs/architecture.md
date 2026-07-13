@@ -131,6 +131,8 @@ flowchart LR
 - API 响应继续使用 `SupplierReport`，保持现有外形（`enable_scope` 默认关，不暴露 scope）。
 - `POST /session/turn` 为有状态多轮端点：请求体 `user_id` 作 authenticated user（无鉴权层 stand-in），`session_id` 只寻址不授权；响应 `{session_id, report}`。
 - **Web 聊天界面**（对外演示 Demo）：`GET /` 返 `web/index.html`、`/static` 挂 `StaticFiles` 托管 `web/{index.html,style.css,app.js}`；自包含 vanilla 页（零构建零 npm、无 CDN），发 `POST /session/turn` 后以「研究中…」加载态→结构化报告卡渲染 `SupplierReport`（recommendation 徽章四值映射、证据表带 `local://` 引用、待解问题=尚未接入数据源）；身份 `user_id` 存 localStorage、`session_id` 内存复用多轮指代。后端仅新增静态托管（`WEB_DIR=Path(__file__).parent/"web"`），端点逻辑不变。
+- **网页流式呈现（DeepSeek）**：`POST /session/turn/stream`（SSE）的呈现层走 `llm/deepseek.py::build_deepseek_polisher`（`stream=True` 逐 token）。三种报告经 `_resolve_report` 定稿后交 LLM 生成中文。**LLM 只呈现、不改结论**：`_render_report_for_llm` 转输入文本时剔除结论，`recommendation` 结论句由后端 `_conclusion_line` 在 LLM 正文前确定性硬发（纵深防御）；约束 `_PRESENTER_SYSTEM_PROMPT`（只复述/不推断/保留原文/围标标线索级）。降级：无 `DEEPSEEK_API_KEY`/LLM 异常→回退 `_report_message_chunks`。`create_app(polisher="__default__")` 哨兵可注入。数据越境经用户明确豁免（呈现层，与记忆层同级）。
+- **Neo4j 兜底**：`Neo4jBackend.from_env` 默认密码 `devpassword`（对齐 docker-compose，仅本地）；`create_app` 启动经 `logging` 打印 graph 后端连通性（`connected`/`unavailable`），不再静默降级。
 
 ## 后续能力
 
