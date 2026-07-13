@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Callable
+from typing import Callable, Iterator
 
 
 _VALID_LEVELS = ("simple", "medium", "complex")
@@ -55,3 +55,78 @@ def build_deepseek_classifier(
             return None
 
     return classify
+
+
+_PRESENTER_SYSTEM_PROMPT = (
+    "你是工商研究报告的呈现器，把给定的结构化报告改写成通顺中文，用于展示。严格规则：\n"
+    "1. 只复述报告中出现的事实，绝不添加任何未在报告中的信息。\n"
+    "2. 绝不推断产能、交期、质量认证或风险；经营范围按原文，不结构化为产品。\n"
+    "3. 保留所有企业名、统一社会信用代码、控制人姓名的原文，不改写。\n"
+    "4. 围标/共享控制人线索必须标注「线索级·须人工复核」，绝不作控制关系或围标认定。\n"
+    "5. 不要复述或改写结论（结论由系统另行给出）；只输出正文，不加建议、不加评论。"
+)
+
+
+def _render_report_for_llm(report_type: str, report: dict) -> str:
+    lines: list[str] = []
+    if report_type in ("named", "unresolved"):
+        lines.append(f"企业：{report.get('supplier_name', '')}")
+        if report.get("summary"):
+            lines.append(f"摘要：{report['summary']}")
+        for ev in report.get("evidence_table", []):
+            lines.append(f"证据[{ev.get('dimension', '')}]：{ev.get('claim', '')}")
+        for r in report.get("risks", []):
+            lines.append(f"提示：{r}")
+    elif report_type == "scope":
+        lines.append(f"能力检索：{report.get('query', '')}")
+        if report.get("summary"):
+            lines.append(f"摘要：{report['summary']}")
+        for c in report.get("candidates", []):
+            lines.append(f"候选：{c.get('legal_name', '')}（相关度 {c.get('top_score', 0):.2f}）")
+    else:  # graph
+        lines.append(f"股权关系检索：{report.get('query', '')}")
+        if report.get("summary"):
+            lines.append(f"摘要：{report['summary']}")
+        for c in report.get("candidates", []):
+            ctrl = "、".join(c.get("ultimate_controllers") or []) or "—"
+            lines.append(f"候选：{c.get('legal_name', '')}｜最终控制人：{ctrl}")
+        for s in report.get("shared_controllers", []):
+            comp = "、".join(s.get("controlled_companies") or [])
+            lines.append(f"共享控制人线索：{s.get('controller_name', '')} → {comp}（{s.get('note', '')}）")
+    for q in report.get("open_questions", []):
+        lines.append(f"待解问题：{q}")
+    return "\n".join(lines)
+
+
+def build_deepseek_polisher(
+    api_key: str | None = None,
+    model: str = "deepseek-chat",
+    base_url: str = "https://api.deepseek.com",
+    client=None,
+) -> "Callable[[str, dict], Iterator[str]] | None":
+    if client is None:
+        api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            return None
+        try:
+            from openai import OpenAI
+        except ImportError:
+            return None
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+    def stream_presentation(report_type: str, report: dict) -> Iterator[str]:
+        response = client.chat.completions.create(
+            model=model,
+            temperature=0,
+            stream=True,
+            messages=[
+                {"role": "system", "content": _PRESENTER_SYSTEM_PROMPT},
+                {"role": "user", "content": _render_report_for_llm(report_type, report)},
+            ],
+        )
+        for chunk in response:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+
+    return stream_presentation
