@@ -1,9 +1,9 @@
 from fastapi.testclient import TestClient
 
 from deepresearch_agent.api import create_app
-from deepresearch_agent.rag.retriever import ScopeHit
 from deepresearch_agent.memory.service import FakeMemoryBackend, MemoryService
 from deepresearch_agent.memory.store import JsonSessionStore
+from deepresearch_agent.rag.retriever import ScopeHit
 
 
 def _client(db, tmp, **kw):

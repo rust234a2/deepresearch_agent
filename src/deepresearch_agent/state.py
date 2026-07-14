@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field, HttpUrl
 from deepresearch_agent.company_models import CompanyResolution
 from deepresearch_agent.query_complexity import ComplexityResult
 
-
 Recommendation = Literal["approve", "conditional", "reject", "insufficient_evidence"]
 
 

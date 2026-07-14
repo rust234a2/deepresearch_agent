@@ -32,7 +32,6 @@ from deepresearch_agent.memory.store import (
 )
 from deepresearch_agent.state import GraphSearchReport, ScopeSearchReport, SupplierReport
 
-
 Question = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 DEFAULT_SESSIONS_DIR = Path("data/procurement/sessions")
@@ -143,9 +142,9 @@ def create_app(
             try:
                 loaded = store.load(request.session_id, user_id)
             except SessionOwnershipError:
-                raise HTTPException(status_code=404, detail="session not found")
+                raise HTTPException(status_code=404, detail="session not found") from None
             except InvalidSessionIdError:
-                raise HTTPException(status_code=400, detail="invalid session_id")
+                raise HTTPException(status_code=400, detail="invalid session_id") from None
             session = loaded or Session(user_id=user_id, session_id=request.session_id)
 
         state = execute_turn(
@@ -171,9 +170,9 @@ def create_app(
             try:
                 loaded = store.load(request.session_id, user_id)
             except SessionOwnershipError:
-                raise HTTPException(status_code=404, detail="session not found")
+                raise HTTPException(status_code=404, detail="session not found") from None
             except InvalidSessionIdError:
-                raise HTTPException(status_code=400, detail="invalid session_id")
+                raise HTTPException(status_code=400, detail="invalid session_id") from None
             session = loaded or Session(user_id=user_id, session_id=request.session_id)
 
         def events():
@@ -231,11 +230,11 @@ def create_app(
         try:
             deleted = store.delete(session_id, user_id)
         except SessionOwnershipError:
-            raise HTTPException(status_code=404, detail="session not found")
+            raise HTTPException(status_code=404, detail="session not found") from None
         except InvalidSessionIdError:
-            raise HTTPException(status_code=400, detail="invalid session_id")
+            raise HTTPException(status_code=400, detail="invalid session_id") from None
         if not deleted:
-            raise HTTPException(status_code=404, detail="session not found")
+            raise HTTPException(status_code=404, detail="session not found") from None
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     application.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

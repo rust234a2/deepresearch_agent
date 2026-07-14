@@ -1,15 +1,19 @@
 from pathlib import Path
 
-from deepresearch_agent.agents.nodes import critique_node, planner_node, researcher_node, writer_node
+from deepresearch_agent.agents.nodes import (
+    critique_node,
+    planner_node,
+    researcher_node,
+    writer_node,
+)
 from deepresearch_agent.company_repository import CompanyRepository
+from deepresearch_agent.domain import load_domain_pack
 from deepresearch_agent.graph_retrieval import assemble_subgraph_context
 from deepresearch_agent.ownership_backend import InMemoryOwnershipBackend
 from deepresearch_agent.ownership_graph import load_ownership_graph
-from deepresearch_agent.domain import load_domain_pack
 from deepresearch_agent.state import ResearchState
 from deepresearch_agent.tools.base import RegisteredTool, ToolRegistry
 from deepresearch_agent.tools.procurement import build_procurement_tool_registry
-
 
 DOMAIN_PACK = load_domain_pack(Path("domains/procurement/domain.yaml"))
 

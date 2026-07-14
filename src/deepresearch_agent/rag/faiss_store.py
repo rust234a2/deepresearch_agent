@@ -7,7 +7,7 @@ import numpy as np
 
 
 class FaissVectorStore:
-    def __init__(self, dimension: int, index: "faiss.Index | None" = None) -> None:
+    def __init__(self, dimension: int, index: faiss.Index | None = None) -> None:
         self.dimension = dimension
         self._index = (
             index
@@ -34,5 +34,5 @@ class FaissVectorStore:
         faiss.write_index(self._index, str(path))
 
     @classmethod
-    def load(cls, path: Path, dimension: int) -> "FaissVectorStore":
+    def load(cls, path: Path, dimension: int) -> FaissVectorStore:
         return cls(dimension=dimension, index=faiss.read_index(str(path)))

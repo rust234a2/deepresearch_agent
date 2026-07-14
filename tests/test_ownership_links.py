@@ -5,7 +5,6 @@ from deepresearch_agent.company_models import RelatedPartyConfig
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.ownership_links import find_related_parties
 
-
 FIXTURES = Path(__file__).parent / "fixtures" / "procurement" / "ownership_links"
 
 A_CODE = "91110000000000111A"

@@ -1,7 +1,12 @@
 from deepresearch_agent.api import _report_message_chunks, _resolve_report
 from deepresearch_agent.state import (
-    GraphSearchCandidate, GraphSearchReport, ResearchState,
-    ScopeCandidate, ScopeSearchReport, SharedControllerFinding, SupplierReport,
+    GraphSearchCandidate,
+    GraphSearchReport,
+    ResearchState,
+    ScopeCandidate,
+    ScopeSearchReport,
+    SharedControllerFinding,
+    SupplierReport,
 )
 
 

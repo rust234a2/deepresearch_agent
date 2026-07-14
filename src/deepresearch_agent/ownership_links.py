@@ -7,7 +7,6 @@ from deepresearch_agent.company_models import (
 )
 from deepresearch_agent.company_repository import CompanyRepository
 
-
 DEFAULT_CONFIG = RelatedPartyConfig()
 
 _RELATION_CONFIDENCE: dict[RelationType, float] = {

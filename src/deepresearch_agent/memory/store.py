@@ -11,7 +11,6 @@ from pathlib import Path
 from deepresearch_agent.company_models import CompanyResolution
 from deepresearch_agent.memory.session import Session
 
-
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 

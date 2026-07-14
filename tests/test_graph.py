@@ -3,7 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from deepresearch_agent.agents.graph import _should_continue, build_graph, run_compiled, run_research
+from deepresearch_agent.agents.graph import (
+    _should_continue,
+    build_graph,
+    run_compiled,
+    run_research,
+)
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.domain import load_domain_pack
 from deepresearch_agent.state import ResearchState
@@ -171,6 +176,7 @@ def test_run_research_enable_graph_without_index_degrades(company_database_path,
 @pytest.mark.slow
 def test_run_research_scope_search_end_to_end(company_database_path, tmp_path):
     from build_scope_index import build_scope_index
+
     from deepresearch_agent.rag.embedding import BgeEmbedder
 
     index_path = tmp_path / "scope_index.faiss"
@@ -188,8 +194,8 @@ def test_run_research_scope_search_end_to_end(company_database_path, tmp_path):
 
 
 def test_build_graph_searcher_none_when_neo4j_unavailable(company_database_path, monkeypatch):
-    from deepresearch_agent.agents import graph as graph_module
     import deepresearch_agent.neo4j_backend as nb
+    from deepresearch_agent.agents import graph as graph_module
 
     def boom(cls):
         raise RuntimeError("neo4j 不可达")

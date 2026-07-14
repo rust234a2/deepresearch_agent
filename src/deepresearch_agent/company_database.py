@@ -5,7 +5,7 @@ import hashlib
 import sqlite3
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from deepresearch_agent.company_data_cleaning import CONTACT_COLUMNS, CORE_COLUMNS
 from deepresearch_agent.company_models import CompanyContact, CompanyProfile, external_node_id
 from deepresearch_agent.rag.chunking import chunk_business_scope
-
 
 SCHEMA_VERSION = 4
 
@@ -181,7 +180,7 @@ def _build_atomic_database(
                     len(contacts),
                     sh_inserted,
                     inv_inserted,
-                    datetime.now(timezone.utc).isoformat(),
+                    datetime.now(UTC).isoformat(),
                 ),
             )
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")

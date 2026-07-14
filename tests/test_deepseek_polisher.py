@@ -1,4 +1,4 @@
-from deepresearch_agent.llm.deepseek import build_deepseek_polisher, _render_report_for_llm
+from deepresearch_agent.llm.deepseek import _render_report_for_llm, build_deepseek_polisher
 
 
 class _FakeChunk:

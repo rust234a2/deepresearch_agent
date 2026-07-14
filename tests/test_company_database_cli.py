@@ -1,9 +1,8 @@
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 from scripts.build_company_database import main
-
 
 FIXTURES = Path(__file__).parent / "fixtures" / "procurement"
 

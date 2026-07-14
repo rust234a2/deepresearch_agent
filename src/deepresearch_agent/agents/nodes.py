@@ -19,7 +19,6 @@ from deepresearch_agent.state import (
 from deepresearch_agent.supplier_resolution import resolve_supplier
 from deepresearch_agent.tools.base import ToolRegistry
 
-
 _DIMENSION_QUESTIONS = {
     "company_identity": "What is {supplier_name}'s registered identity?",
     "registration": "What is {supplier_name}'s registration status and history?",

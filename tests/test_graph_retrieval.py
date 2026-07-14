@@ -6,7 +6,6 @@ from deepresearch_agent.graph_retrieval import assemble_subgraph_context, hybrid
 from deepresearch_agent.ownership_backend import InMemoryOwnershipBackend
 from deepresearch_agent.ownership_graph import load_ownership_graph
 
-
 LINKS = Path(__file__).parent / "fixtures" / "procurement" / "ownership_links"
 A_CODE = "91110000000000111A"
 B_CODE = "91110000000000222B"

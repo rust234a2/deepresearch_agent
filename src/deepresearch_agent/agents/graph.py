@@ -17,7 +17,6 @@ from deepresearch_agent.observability import configure_tracing, get_tracer, trac
 from deepresearch_agent.state import ResearchState
 from deepresearch_agent.tools.procurement import build_procurement_tool_registry
 
-
 DEFAULT_DATABASE_PATH = Path("data/procurement/derived/companies.sqlite3")
 DEFAULT_INDEX_PATH = Path("data/procurement/derived/scope_index.faiss")
 

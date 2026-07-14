@@ -52,9 +52,38 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-addopts = "-q -m 'not slow and not neo4j and not llm'"
+# -p no:phoenix：禁用 arize-phoenix 注册的 pytest 插件自动加载
+# （它 import phoenix.server→grpc，会污染零网络测试；Phoenix 仅供 CLI --trace 手动用）
+addopts = "-q -p no:phoenix -m 'not slow and not neo4j and not llm'"
 markers = [
   "slow: 需要重型 ML 依赖或模型下载，默认排除",
   "neo4j: 需要本地 Neo4j（docker compose up）的对拍测试，默认排除",
   "llm: 需要外部 LLM（DeepSeek）与 mem0/chromadb 的真链路测试，默认排除",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E/F=pyflakes+pycodestyle, I=isort, B=bugbear, UP=pyupgrade, C4=comprehensions
+select = ["E", "F", "I", "B", "UP", "C4", "W"]
+# E501 行长交给 formatter；B008 FastAPI 依赖注入模式需要；
+# 以下为低信号/需逐例行为核对的风格项，先豁免、后续按需收紧：
+# B905 zip strict、E731 lambda 赋值、B007 未用循环变量、B023 闭包捕获循环变量
+ignore = ["E501", "B008", "B905", "E731", "B007", "B023"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+ignore_missing_imports = true
+# 渐进式：先不强制全量注解，只抓明确错误
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+no_implicit_optional = true

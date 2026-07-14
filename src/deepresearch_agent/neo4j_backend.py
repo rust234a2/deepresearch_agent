@@ -17,7 +17,7 @@ class Neo4jBackend:
         self._driver = driver
 
     @classmethod
-    def from_env(cls) -> "Neo4jBackend":
+    def from_env(cls) -> Neo4jBackend:
         from neo4j import GraphDatabase
 
         uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")

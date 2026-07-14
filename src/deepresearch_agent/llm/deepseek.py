@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Callable, Iterator
-
+from collections.abc import Callable, Iterator
 
 _VALID_LEVELS = ("simple", "medium", "complex")
 
@@ -97,7 +96,7 @@ def build_deepseek_polisher(
     model: str = "deepseek-chat",
     base_url: str = "https://api.deepseek.com",
     client=None,
-) -> "Callable[[str, dict], Iterator[str]] | None":
+) -> Callable[[str, dict], Iterator[str]] | None:
     if client is None:
         api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
         if not api_key:

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Callable, Literal
+from collections.abc import Callable
+from typing import Literal
 
 from pydantic import BaseModel
 
 from deepresearch_agent.company_repository import CompanyRepository
-
 
 RELATIONSHIP_KEYWORDS = (
     "控制人",

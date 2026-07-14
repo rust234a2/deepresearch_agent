@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-
 _SECTION_SEPARATOR = "***"
 _ITEM_SEPARATORS = re.compile(r"[、；;，,。]")
 _LABEL_PATTERN = re.compile(r"^([^：:]{1,12})[：:]")

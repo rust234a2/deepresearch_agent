@@ -5,7 +5,6 @@ from deepresearch_agent.company_models import external_node_id
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.ownership_graph import load_ownership_graph
 
-
 LINKS = Path(__file__).parent / "fixtures" / "procurement" / "ownership_links"
 A_CODE = "91110000000000111A"
 B_CODE = "91110000000000222B"

@@ -7,7 +7,6 @@ from deepresearch_agent.company_data_cleaning import normalize_date, parse_capit
 from deepresearch_agent.company_database import normalize_company_name
 from deepresearch_agent.vendor_export import clean_cell, unquote
 
-
 OUTPUT_COLUMNS = [
     "company_name",
     "normalized_company_name",

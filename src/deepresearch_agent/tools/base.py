@@ -6,7 +6,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 PermissionTier = Literal["read_public", "read_private", "write", "human_approval"]
 
 

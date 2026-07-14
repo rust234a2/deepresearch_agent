@@ -4,7 +4,6 @@ from deepresearch_agent.company_database import build_company_database
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.tools.procurement import build_procurement_tool_registry
 
-
 FIXTURES = Path(__file__).parent / "fixtures" / "procurement"
 
 

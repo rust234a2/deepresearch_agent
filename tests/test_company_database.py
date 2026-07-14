@@ -7,7 +7,6 @@ import pytest
 from deepresearch_agent.company_data_cleaning import CONTACT_COLUMNS, CORE_COLUMNS
 from deepresearch_agent.company_database import build_company_database
 
-
 FIXTURES = Path(__file__).parent / "fixtures" / "procurement"
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-
 DEFAULT_CHROMA_PATH = "data/procurement/derived/mem0_chroma"
 DEFAULT_EMBEDDER_MODEL = "BAAI/bge-small-zh-v1.5"
 
@@ -19,7 +18,7 @@ class MemoryConfig:
     collection_name: str = "procurement_memory"
 
     @classmethod
-    def deepseek(cls, **kwargs) -> "MemoryConfig":
+    def deepseek(cls, **kwargs) -> MemoryConfig:
         return cls(**kwargs)
 
     @classmethod
@@ -28,7 +27,7 @@ class MemoryConfig:
         model: str = "qwen2.5:3b",
         base_url: str = "http://localhost:11434",
         **kwargs,
-    ) -> "MemoryConfig":
+    ) -> MemoryConfig:
         return cls(
             llm_provider="ollama",
             llm_model=model,

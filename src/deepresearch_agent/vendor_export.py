@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-
 _EXCEL_QUOTE = re.compile(r'^="(.*)"$', re.DOTALL)
 
 

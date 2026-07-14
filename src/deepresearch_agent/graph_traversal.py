@@ -7,7 +7,6 @@ from pydantic import BaseModel
 from deepresearch_agent.company_models import GraphEdge
 from deepresearch_agent.ownership_graph import OwnershipGraph
 
-
 DEFAULT_BLOCK_EXPAND_TYPES = ("fund",)
 
 

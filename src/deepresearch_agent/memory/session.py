@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 
 from deepresearch_agent.company_models import CompanyResolution
 
-
 ANAPHORA_MARKERS: tuple[str, ...] = (
     "它",
     "该公司",

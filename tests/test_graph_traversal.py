@@ -11,7 +11,6 @@ from deepresearch_agent.graph_traversal import (
 )
 from deepresearch_agent.ownership_graph import OwnershipGraph, load_ownership_graph
 
-
 LINKS = Path(__file__).parent / "fixtures" / "procurement" / "ownership_links"
 A_CODE = "91110000000000111A"
 B_CODE = "91110000000000222B"

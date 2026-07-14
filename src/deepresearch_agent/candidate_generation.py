@@ -7,7 +7,6 @@ from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-
 INDUSTRIES = (
     "电子元器件",
     "半导体",
