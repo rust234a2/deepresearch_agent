@@ -207,23 +207,27 @@ def _event_payload(body: str, event: str):
 
 def test_stream_emits_graph_subgraph_before_report(company_database_path, tmp_path, monkeypatch):
     from deepresearch_agent.agents import graph as graph_module
-    from deepresearch_agent.graph_retrieval import HybridContext, SeedContext
-    from deepresearch_agent.graph_traversal import ControllerResult
-    from deepresearch_agent.ownership_backend import NeighborEdge
+    from deepresearch_agent.graph_retrieval import HybridContext, SeedContext, SharedController
 
     def build_scope(database_path, index_path):
         return _ScopeRetriever()
 
     def build_graph(database_path, scope_retriever):
         def search(query):
-            return HybridContext(query=query, seeds=[SeedContext(
-                code="91330000123456789X", name="示例科技股份有限公司", score=0.95,
-                controllers=[ControllerResult(node_id="person:张三", display_name="张三",
-                                              depth=1, via_person=True)],
-                neighbors=[NeighborEdge(node_id="person:张三", name="张三", node_type="person",
-                                        edge_type="shareholding", direction="in",
-                                        holding_pct="60%")],
-            )], shared_controllers=[])
+            return HybridContext(
+                query=query,
+                seeds=[
+                    SeedContext(code="91330000123456789X", name="示例科技股份有限公司",
+                                score=0.95, controllers=[], neighbors=[]),
+                    SeedContext(code="91330000123456780Y", name="样例精密股份有限公司",
+                                score=0.80, controllers=[], neighbors=[]),
+                ],
+                shared_controllers=[SharedController(
+                    node_id="person:张三", name="张三",
+                    controlled_seeds=["91330000123456789X", "91330000123456780Y"],
+                    via_person=True,
+                )],
+            )
         return search
 
     monkeypatch.setattr(graph_module, "_build_scope_retriever", build_scope)
@@ -238,8 +242,11 @@ def test_stream_emits_graph_subgraph_before_report(company_database_path, tmp_pa
     assert "event: graph_subgraph" in body
     assert body.index("event: graph_subgraph") < body.index("event: report_start")
     payload = _event_payload(body, "graph_subgraph")
-    assert {n["id"] for n in payload["nodes"]} == {"91330000123456789X", "person:张三"}
-    assert payload["truncated"] is False
+    assert {n["id"] for n in payload["nodes"]} == {
+        "query", "91330000123456789X", "91330000123456780Y", "person:张三",
+    }
+    hub = next(n for n in payload["nodes"] if n["kind"] == "query")
+    assert hub["name"] == "哪些做注塑的供应商互相关联"
 
 
 def test_stream_named_mode_has_no_graph_subgraph_event(company_database_path, tmp_path):

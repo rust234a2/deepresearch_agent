@@ -679,25 +679,28 @@ def test_writer_graph_summary_flags_collusion(company_database_path):
 
 def test_retrieve_graph_populates_subgraph():
     from deepresearch_agent.agents.nodes import _retrieve_graph
-    from deepresearch_agent.graph_retrieval import HybridContext, SeedContext
-    from deepresearch_agent.graph_traversal import ControllerResult
-    from deepresearch_agent.ownership_backend import NeighborEdge
+    from deepresearch_agent.graph_retrieval import HybridContext, SeedContext, SharedController
 
     def searcher(query):
-        return HybridContext(query=query, seeds=[SeedContext(
-            code="X", name="示例", score=0.9,
-            controllers=[ControllerResult(node_id="person:张三", display_name="张三",
-                                          depth=1, via_person=True)],
-            neighbors=[NeighborEdge(node_id="ext:基金", name="基金", node_type="company",
-                                    edge_type="shareholding", direction="in",
-                                    holding_pct="60%")],
-        )], shared_controllers=[])
+        return HybridContext(
+            query=query,
+            seeds=[
+                SeedContext(code="X", name="示例", score=0.9, controllers=[], neighbors=[]),
+                SeedContext(code="Y", name="样例", score=0.7, controllers=[], neighbors=[]),
+            ],
+            shared_controllers=[SharedController(
+                node_id="person:张三", name="张三", controlled_seeds=["X", "Y"],
+                via_person=True,
+            )],
+        )
 
     state = ResearchState(question="q", domain="procurement")
     assert _retrieve_graph(state, searcher) is None
     assert state.graph_subgraph is not None
-    assert {n.id for n in state.graph_subgraph.nodes} == {"X", "person:张三", "ext:基金"}
-    assert len(state.graph_subgraph.edges) == 2
+    assert {n.id for n in state.graph_subgraph.nodes} == {"query", "X", "Y", "person:张三"}
+    kinds = {e.kind for e in state.graph_subgraph.edges}
+    assert kinds == {"semantic_match", "control_clue"}
+    assert len(state.graph_subgraph.edges) == 4
 
 
 def test_graph_runtime_failure_leaves_subgraph_none(company_database_path):

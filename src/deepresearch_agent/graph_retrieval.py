@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Literal
 
 from pydantic import BaseModel
@@ -101,17 +100,17 @@ def hybrid_search(
     )
 
 
-# ---------- 可视化子图投影（供网页图谱面板使用，纯函数、不额外查图） ----------
+# ---------- 问题聚焦子图投影（供网页图谱面板使用，纯函数、不额外查图） ----------
+# 只回答提问本身：查询概念节点 → 命中的种子企业，加上种子间的实际关联证据
+# （共享控制人）。单一控制人、直接股东、对外投资是噪声，不进入载荷。
 
-MAX_NEIGHBORS_PER_DIRECTION = 15
-
-_KIND_PRIORITY = {"seed": 3, "controller": 2, "shareholder": 1, "investment": 0}
+QUERY_NODE_ID = "query"
 
 
 class SubgraphNode(BaseModel):
     id: str
     name: str
-    kind: Literal["seed", "shareholder", "investment", "controller"]
+    kind: Literal["query", "seed", "controller"]
     node_type: str = ""
     score: float = 0.0
     is_shared_controller: bool = False
@@ -121,117 +120,55 @@ class SubgraphNode(BaseModel):
 class SubgraphEdge(BaseModel):
     source: str
     target: str
-    kind: Literal["shareholding", "investment", "control_clue"]
-    holding_pct: str | None = None
+    kind: Literal["semantic_match", "control_clue"]
     via_person: bool = False
 
 
 class GraphSubgraph(BaseModel):
     nodes: list[SubgraphNode]
     edges: list[SubgraphEdge]
-    truncated: bool = False
-
-
-def _pct_value(pct: str | None) -> float:
-    if not pct:
-        return -1.0
-    match = re.search(r"\d+(?:\.\d+)?", pct)
-    return float(match.group()) if match else -1.0
 
 
 def project_subgraph(context: HybridContext) -> GraphSubgraph:
-    nodes: dict[str, SubgraphNode] = {}
+    if not context.seeds:
+        return GraphSubgraph(nodes=[], edges=[])
+
+    nodes: list[SubgraphNode] = [
+        SubgraphNode(id=QUERY_NODE_ID, name=context.query or "", kind="query")
+    ]
     edges: list[SubgraphEdge] = []
-    seen_edges: set[tuple[str, str, str]] = set()
-    truncated = False
-
-    def upsert(node: SubgraphNode) -> None:
-        existing = nodes.get(node.id)
-        if existing is None:
-            nodes[node.id] = node
-            return
-        keep, other = (
-            (node, existing)
-            if _KIND_PRIORITY[node.kind] > _KIND_PRIORITY[existing.kind]
-            else (existing, node)
-        )
-        keep.is_shared_controller = keep.is_shared_controller or other.is_shared_controller
-        keep.concentrated_industries = keep.concentrated_industries or other.concentrated_industries
-        keep.score = max(keep.score, other.score)
-        keep.node_type = keep.node_type or other.node_type
-        nodes[node.id] = keep
-
-    def add_edge(edge: SubgraphEdge) -> None:
-        key = (edge.source, edge.target, edge.kind)
-        if key not in seen_edges:
-            seen_edges.add(key)
-            edges.append(edge)
-
+    seed_codes: set[str] = set()
     for seed in context.seeds:
-        upsert(
+        seed_codes.add(seed.code)
+        nodes.append(
             SubgraphNode(
                 id=seed.code, name=seed.name, kind="seed", node_type="company", score=seed.score
             )
         )
+        edges.append(SubgraphEdge(source=QUERY_NODE_ID, target=seed.code, kind="semantic_match"))
 
-    shared_meta = {item.node_id: item for item in context.shared_controllers}
-    for seed in context.seeds:
-        for direction, kind in (("in", "shareholder"), ("out", "investment")):
-            picked = sorted(
-                (n for n in seed.neighbors if n.direction == direction),
-                key=lambda n: (-_pct_value(n.holding_pct), n.node_id),
+    for shared in context.shared_controllers:
+        controlled = [code for code in shared.controlled_seeds if code in seed_codes]
+        if not controlled:
+            continue
+        nodes.append(
+            SubgraphNode(
+                id=shared.node_id,
+                name=shared.name,
+                kind="controller",
+                node_type="person" if shared.node_id.startswith("person:") else "company",
+                is_shared_controller=True,
+                concentrated_industries=list(shared.concentrated_industries),
             )
-            if len(picked) > MAX_NEIGHBORS_PER_DIRECTION:
-                truncated = True
-                picked = picked[:MAX_NEIGHBORS_PER_DIRECTION]
-            for neighbor in picked:
-                upsert(
-                    SubgraphNode(
-                        id=neighbor.node_id,
-                        name=neighbor.name,
-                        kind=kind,  # type: ignore[arg-type]
-                        node_type=neighbor.node_type,
-                    )
-                )
-                if direction == "in":
-                    add_edge(
-                        SubgraphEdge(
-                            source=neighbor.node_id,
-                            target=seed.code,
-                            kind=neighbor.edge_type,
-                            holding_pct=neighbor.holding_pct,
-                        )
-                    )
-                else:
-                    add_edge(
-                        SubgraphEdge(
-                            source=seed.code,
-                            target=neighbor.node_id,
-                            kind=neighbor.edge_type,
-                            holding_pct=neighbor.holding_pct,
-                        )
-                    )
-        for controller in seed.controllers:
-            shared = shared_meta.get(controller.node_id)
-            upsert(
-                SubgraphNode(
-                    id=controller.node_id,
-                    name=controller.display_name,
-                    kind="controller",
-                    node_type="person" if controller.node_id.startswith("person:") else "company",
-                    is_shared_controller=shared is not None,
-                    concentrated_industries=(
-                        list(shared.concentrated_industries) if shared else []
-                    ),
-                )
+        )
+        edges.extend(
+            SubgraphEdge(
+                source=shared.node_id,
+                target=code,
+                kind="control_clue",
+                via_person=shared.via_person,
             )
-            add_edge(
-                SubgraphEdge(
-                    source=controller.node_id,
-                    target=seed.code,
-                    kind="control_clue",
-                    via_person=controller.via_person,
-                )
-            )
+            for code in controlled
+        )
 
-    return GraphSubgraph(nodes=list(nodes.values()), edges=edges, truncated=truncated)
+    return GraphSubgraph(nodes=nodes, edges=edges)

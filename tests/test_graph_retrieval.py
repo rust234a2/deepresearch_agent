@@ -140,7 +140,7 @@ def test_inmemory_backend_reports_no_industry_concentration(tmp_path):
     assert all(s.concentrated_industries == [] for s in ctx.shared_controllers)
 
 
-# ---------- project_subgraph：HybridContext → 可视化子图 ----------
+# ---------- project_subgraph：HybridContext → 问题聚焦子图（查询+种子+共享控制人） ----------
 
 from deepresearch_agent.graph_retrieval import (  # noqa: E402
     HybridContext,
@@ -166,59 +166,38 @@ def _seed(code, name, score=0.0, controllers=(), neighbors=()):
                        controllers=list(controllers), neighbors=list(neighbors))
 
 
-def test_project_subgraph_maps_nodes_and_edges():
-    ctx = HybridContext(seeds=[_seed(
-        "91A", "甲公司", score=0.9,
-        controllers=[_controller("person:张三", "张三", via_person=True)],
-        neighbors=[
-            _neighbor("ext:基金X", "基金X", "company", "shareholding", "in", "60%"),
-            _neighbor("91C", "丙公司", "company", "investment", "out", "30%"),
-        ],
-    )], shared_controllers=[])
-
-    sub = project_subgraph(ctx)
-
-    kinds = {n.id: n.kind for n in sub.nodes}
-    assert kinds == {"91A": "seed", "ext:基金X": "shareholder",
-                     "91C": "investment", "person:张三": "controller"}
-    types = {n.id: n.node_type for n in sub.nodes}
-    assert types["person:张三"] == "person" and types["91A"] == "company"
-    seed_node = next(n for n in sub.nodes if n.id == "91A")
-    assert seed_node.score == 0.9
-    edges = {(e.source, e.target): e for e in sub.edges}
-    assert edges[("ext:基金X", "91A")].kind == "shareholding"
-    assert edges[("ext:基金X", "91A")].holding_pct == "60%"
-    assert edges[("91A", "91C")].kind == "investment"
-    clue = edges[("person:张三", "91A")]
-    assert clue.kind == "control_clue" and clue.via_person is True
-    assert sub.truncated is False
-
-
-def test_project_subgraph_dedups_prefers_stronger_kind_and_keeps_edges():
-    # 张三 既是 甲 的直接股东，又是 甲、乙 的最终控制人 → 一个节点、kind=controller、三条边
-    zhang_in = _neighbor("person:张三", "张三", "person", "shareholding", "in", "40%")
-    ctx = HybridContext(seeds=[
-        _seed("91A", "甲公司", 0.9,
-              controllers=[_controller("person:张三", "张三", True)], neighbors=[zhang_in]),
-        _seed("91B", "乙公司", 0.8, controllers=[_controller("person:张三", "张三", True)]),
+def test_project_subgraph_query_hub_and_semantic_edges():
+    ctx = HybridContext(query="注塑", seeds=[
+        _seed("91A", "甲公司", score=0.9),
+        _seed("91B", "乙公司", score=0.7),
     ], shared_controllers=[])
 
     sub = project_subgraph(ctx)
 
-    zhang = [n for n in sub.nodes if n.id == "person:张三"]
-    assert len(zhang) == 1 and zhang[0].kind == "controller"
-    triples = sorted((e.source, e.target, e.kind) for e in sub.edges)
-    assert triples == [
-        ("person:张三", "91A", "control_clue"),
-        ("person:张三", "91A", "shareholding"),
-        ("person:张三", "91B", "control_clue"),
-    ]
+    hub = next(n for n in sub.nodes if n.kind == "query")
+    assert hub.id == "query" and hub.name == "注塑"
+    kinds = {n.id: n.kind for n in sub.nodes}
+    assert kinds == {"query": "query", "91A": "seed", "91B": "seed"}
+    seed_a = next(n for n in sub.nodes if n.id == "91A")
+    assert seed_a.score == 0.9 and seed_a.node_type == "company"
+    edges = {(e.source, e.target): e for e in sub.edges}
+    assert edges[("query", "91A")].kind == "semantic_match"
+    assert edges[("query", "91B")].kind == "semantic_match"
+    assert len(sub.edges) == 2
 
 
-def test_project_subgraph_marks_shared_controllers():
+def test_project_subgraph_keeps_only_shared_controllers():
+    # 甲有独占控制人张三、直接股东基金X、对外投资丙——均不入图；共享控制人 集团 入图
     ctx = HybridContext(
+        query="q",
         seeds=[
-            _seed("91A", "甲公司", 0.9, controllers=[_controller("ext:集团", "集团")]),
+            _seed("91A", "甲公司", 0.9,
+                  controllers=[_controller("person:张三", "张三", True),
+                               _controller("ext:集团", "集团")],
+                  neighbors=[
+                      _neighbor("ext:基金X", "基金X", "company", "shareholding", "in", "60%"),
+                      _neighbor("91C", "丙公司", "company", "investment", "out", "30%"),
+                  ]),
             _seed("91B", "乙公司", 0.8, controllers=[_controller("ext:集团", "集团")]),
         ],
         shared_controllers=[SharedController(
@@ -229,29 +208,63 @@ def test_project_subgraph_marks_shared_controllers():
 
     sub = project_subgraph(ctx)
 
-    node = next(n for n in sub.nodes if n.id == "ext:集团")
-    assert node.is_shared_controller is True
-    assert node.concentrated_industries == ["机床制造"]
-    assert node.node_type == "company"
+    ids = {n.id for n in sub.nodes}
+    assert ids == {"query", "91A", "91B", "ext:集团"}
+    group = next(n for n in sub.nodes if n.id == "ext:集团")
+    assert group.kind == "controller"
+    assert group.is_shared_controller is True
+    assert group.concentrated_industries == ["机床制造"]
+    assert group.node_type == "company"
+    clues = sorted((e.source, e.target) for e in sub.edges if e.kind == "control_clue")
+    assert clues == [("ext:集团", "91A"), ("ext:集团", "91B")]
 
 
-def test_project_subgraph_truncates_neighbors_by_pct():
-    neighbors = [
-        _neighbor(f"ext:股东{i:02d}", f"股东{i:02d}", "company", "shareholding", "in", f"{i}%")
-        for i in range(1, 18)  # 17 个直接股东，比例 1%..17%
-    ]
-    ctx = HybridContext(seeds=[_seed("91A", "甲公司", 0.9, neighbors=neighbors)],
+def test_project_subgraph_shared_controller_via_person_and_person_type():
+    ctx = HybridContext(
+        query="q",
+        seeds=[_seed("91A", "甲公司", 0.9), _seed("91B", "乙公司", 0.8)],
+        shared_controllers=[SharedController(
+            node_id="person:张三", name="张三", controlled_seeds=["91A", "91B"],
+            via_person=True, concentrated_industries=[],
+        )],
+    )
+
+    sub = project_subgraph(ctx)
+
+    zhang = next(n for n in sub.nodes if n.id == "person:张三")
+    assert zhang.node_type == "person"
+    assert zhang.concentrated_industries == []
+    clues = [e for e in sub.edges if e.kind == "control_clue"]
+    assert len(clues) == 2 and all(e.via_person for e in clues)
+
+
+def test_project_subgraph_skips_controlled_codes_outside_seeds():
+    # controlled_seeds 含种子集合外的代码 → 不为其造节点/边
+    ctx = HybridContext(
+        query="q",
+        seeds=[_seed("91A", "甲公司", 0.9), _seed("91B", "乙公司", 0.8)],
+        shared_controllers=[SharedController(
+            node_id="ext:集团", name="集团", controlled_seeds=["91A", "91B", "91X"],
+            via_person=False,
+        )],
+    )
+
+    sub = project_subgraph(ctx)
+
+    assert "91X" not in {n.id for n in sub.nodes}
+    assert sorted(e.target for e in sub.edges if e.kind == "control_clue") == ["91A", "91B"]
+
+
+def test_project_subgraph_no_shared_controllers_is_hub_and_seeds_only():
+    ctx = HybridContext(query="注塑", seeds=[_seed("91A", "甲公司", 0.9)],
                         shared_controllers=[])
 
     sub = project_subgraph(ctx)
 
-    holders = {n.id for n in sub.nodes if n.kind == "shareholder"}
-    assert len(holders) == 15
-    assert "ext:股东17" in holders and "ext:股东03" in holders  # 高比例保留
-    assert "ext:股东01" not in holders and "ext:股东02" not in holders  # 最低两个被截断
-    assert sub.truncated is True
+    assert {n.kind for n in sub.nodes} == {"query", "seed"}
+    assert all(e.kind == "semantic_match" for e in sub.edges)
 
 
-def test_project_subgraph_empty_context():
-    sub = project_subgraph(HybridContext(seeds=[], shared_controllers=[]))
-    assert sub.nodes == [] and sub.edges == [] and sub.truncated is False
+def test_project_subgraph_empty_seeds_yields_empty_subgraph():
+    sub = project_subgraph(HybridContext(query="注塑", seeds=[], shared_controllers=[]))
+    assert sub.nodes == [] and sub.edges == []
