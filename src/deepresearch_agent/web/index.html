@@ -82,18 +82,18 @@
         </button>
       </div>
       <div class="graph-legend" id="graph-legend" hidden>
+        <span class="lg query">查询</span>
         <span class="lg pill">企业</span>
         <span class="lg square">自然人</span>
-        <span class="lg solid">持股 / 投资</span>
+        <span class="lg solid">语义命中</span>
         <span class="lg dashed">控制线索</span>
-        <span class="lg shared">同行业+同控制人</span>
+        <span class="lg collusion">同行业+同控制人</span>
       </div>
       <div class="graph-canvas-wrap">
         <svg id="graph-svg" role="img" aria-label="股权图谱子图"></svg>
         <div class="graph-tooltip" id="graph-tooltip" hidden></div>
-        <p class="graph-empty" id="graph-empty">发起“哪些供应商互相关联”这类图谱检索后，这里会展示本次检索涉及的节点和边。</p>
+        <p class="graph-empty" id="graph-empty">发起“哪些供应商互相关联”这类图谱检索后，这里会展示问题命中的供应商及它们之间的关联线索。</p>
       </div>
-      <p class="graph-foot" id="graph-foot" hidden>部分直接股东/投资未展示。</p>
     </aside>
   </div>
   <script src="/static/graph.js" defer></script>

@@ -83,3 +83,14 @@ def test_graph_js_auto_opens_drawer_on_narrow_viewport(company_database_path, tm
     r = _client(company_database_path, tmp_path).get("/static/graph.js")
     # 窄屏（≤1100px）抽屉模式下，图谱数据到达须自动弹出，否则用户无感知
     assert 'classList.add("open")' in r.text
+
+
+def test_web_graph_panel_focused_view(company_database_path, tmp_path):
+    client = _client(company_database_path, tmp_path)
+    page = client.get("/").text
+    assert "语义命中" in page          # 图例：查询→种子实线
+    assert "同行业+同控制人" in page   # 红色仅围标线索
+    js = client.get("/static/graph.js").text
+    assert "semantic_match" in js
+    assert "collusion" in js           # 红色样式只挂围标 class
+    assert "holding_pct" not in js     # 持股比例随全量层一并移除

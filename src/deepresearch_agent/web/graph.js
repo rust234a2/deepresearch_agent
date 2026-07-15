@@ -1,22 +1,22 @@
-/* 股权图谱线索面板：确定性分层布局 + 手写 SVG，零依赖。
+/* 股权图谱线索面板：问题聚焦子图（查询节点 → 命中种子 → 共享控制人），
+   确定性分层布局 + 手写 SVG，零依赖。
    只陈述 graph_subgraph 载荷里的字段；线索级证据，须人工复核。 */
 (() => {
   "use strict";
   const NS = "http://www.w3.org/2000/svg";
-  const NODE_W = 150, NODE_H = 34, GAP_X = 24, ROW_GAP = 112, PAD = 48;
+  const NODE_W = 150, QUERY_W = 220, NODE_H = 34, GAP_X = 24, ROW_GAP = 112, PAD = 48;
+  const MAX_COLS = 10;
   const KIND_LABEL = {
+    query: "查询",
     seed: "候选企业",
-    shareholder: "直接股东",
-    investment: "对外投资",
-    controller: "最终控制人 · 线索",
+    controller: "共享控制人 · 线索",
   };
-  const EDGE_LABEL = { shareholding: "持股", investment: "投资", control_clue: "控制线索" };
+  const EDGE_LABEL = { semantic_match: "语义命中", control_clue: "控制线索" };
 
   const panel = document.getElementById("graph-panel");
   const svg = document.getElementById("graph-svg");
   const emptyEl = document.getElementById("graph-empty");
   const legendEl = document.getElementById("graph-legend");
-  const footEl = document.getElementById("graph-foot");
   const tooltip = document.getElementById("graph-tooltip");
   const collapseBtn = document.getElementById("graph-collapse");
   const toggleBtn = document.getElementById("graph-toggle");
@@ -31,55 +31,37 @@
     return n;
   }
   const short = (s, max) => (s && s.length > max ? s.slice(0, max - 1) + "…" : s || "");
+  const widthOf = (n) => (n.kind === "query" ? QUERY_W : NODE_W);
 
-  // ---- 布局：kind 定层（共享控制人 / 控制人+股东 / 种子 / 对外投资），列按相连种子聚簇；
-  //      每层最多 MAX_COLS 列自动换行，避免上百节点排成一行导致全图适配后不可见 ----
-  const MAX_COLS = 10;
+  // ---- 布局：查询节点顶层居中 → 种子层（按得分降序）→ 共享控制人层；超列换行 ----
   function layout(payload) {
-    const layerOf = (n) => {
-      if (n.kind === "seed") return 2;
-      if (n.kind === "investment") return 3;
-      return n.is_shared_controller ? 0 : 1;
-    };
-    const layers = [[], [], [], []];
+    const layerOf = (n) => (n.kind === "query" ? 0 : n.kind === "seed" ? 1 : 2);
+    const layers = [[], [], []];
     payload.nodes.forEach((n) => layers[layerOf(n)].push(n));
-    layers[2].sort((a, b) => (b.score - a.score) || (a.id < b.id ? -1 : 1));
-    const seedCol = new Map(layers[2].map((n, i) => [n.id, i]));
-    const anchors = new Map();
-    payload.edges.forEach((e) => {
-      const seed = seedCol.has(e.source) ? e.source : (seedCol.has(e.target) ? e.target : null);
-      const other = seed === e.source ? e.target : e.source;
-      if (seed == null || seedCol.has(other)) return;
-      if (!anchors.has(other)) anchors.set(other, []);
-      anchors.get(other).push(seedCol.get(seed));
-    });
-    const anchorOf = (id) => {
-      const a = anchors.get(id);
-      return a && a.length ? a.reduce((x, y) => x + y, 0) / a.length : Number.MAX_SAFE_INTEGER;
-    };
-    [0, 1, 3].forEach((r) =>
-      layers[r].sort((a, b) => (anchorOf(a.id) - anchorOf(b.id)) || (a.id < b.id ? -1 : 1)));
+    layers[1].sort((a, b) => (b.score - a.score) || (a.id < b.id ? -1 : 1));
+    layers[2].sort((a, b) => (a.id < b.id ? -1 : 1));
 
     const visualRows = [];
     layers.forEach((layer) => {
       for (let i = 0; i < layer.length; i += MAX_COLS) visualRows.push(layer.slice(i, i + MAX_COLS));
     });
-    const cols = Math.max(...visualRows.map((r) => r.length));
-    const width = PAD * 2 + cols * NODE_W + (cols - 1) * GAP_X;
+    const rowWidth = (row) =>
+      row.reduce((w, n) => w + widthOf(n), 0) + (row.length - 1) * GAP_X;
+    const width = PAD * 2 + Math.max(...visualRows.map(rowWidth));
     const xy = new Map();
     visualRows.forEach((row, ri) => {
-      const rowW = row.length * NODE_W + (row.length - 1) * GAP_X;
-      row.forEach((n, i) => xy.set(n.id, {
-        x: (width - rowW) / 2 + i * (NODE_W + GAP_X),
-        y: PAD + ri * ROW_GAP,
-      }));
+      let x = (width - rowWidth(row)) / 2;
+      row.forEach((n) => {
+        xy.set(n.id, { x, y: PAD + ri * ROW_GAP });
+        x += widthOf(n) + GAP_X;
+      });
     });
     return { xy, width, height: PAD * 2 + (visualRows.length - 1) * ROW_GAP + NODE_H };
   }
 
-  function edgePath(a, b) {
-    const sx = a.x + NODE_W / 2, tx = b.x + NODE_W / 2;
-    if (a.y === b.y) {  // 同行相连（如种子间投资）：上方绕行
+  function edgePath(a, b, wa, wb) {
+    const sx = a.x + wa / 2, tx = b.x + wb / 2;
+    if (a.y === b.y) {
       return `M ${sx} ${a.y} C ${sx} ${a.y - 56}, ${tx} ${b.y - 56}, ${tx} ${b.y}`;
     }
     const down = a.y < b.y;
@@ -91,7 +73,12 @@
 
   // ---- tooltip ----
   function showTooltip(n, ev) {
-    const lines = [n.name, (KIND_LABEL[n.kind] || n.kind) + " · " + (n.node_type === "person" ? "自然人" : "企业")];
+    const lines = [n.name];
+    if (n.kind === "query") {
+      lines.push("本轮图谱检索的问题");
+    } else {
+      lines.push((KIND_LABEL[n.kind] || n.kind) + " · " + (n.node_type === "person" ? "自然人" : "企业"));
+    }
     if (n.kind === "seed" && n.score) lines.push("检索得分 " + Number(n.score).toFixed(2));
     if (n.is_shared_controller) {
       lines.push(n.concentrated_industries && n.concentrated_industries.length
@@ -139,26 +126,29 @@
     const root = svgEl("g", { class: "graph-root" });
     svg.appendChild(root);
 
-    const sharedIds = new Set(
-      payload.nodes.filter((n) => n.is_shared_controller).map((n) => n.id));
+    const byId = new Map(payload.nodes.map((n) => [n.id, n]));
+    const collusion = new Set(payload.nodes
+      .filter((n) => n.concentrated_industries && n.concentrated_industries.length)
+      .map((n) => n.id));
     const incident = new Map(); // 节点 id → 关联边 <g> 列表
     (payload.edges || []).forEach((e) => {
       const a = xy.get(e.source), b = xy.get(e.target);
+      const na = byId.get(e.source), nb = byId.get(e.target);
       if (!a || !b) return;
-      const shared = e.kind === "control_clue" && sharedIds.has(e.source);
-      const g = svgEl("g", { class: "gedge " + e.kind + (shared ? " shared" : "") });
+      const red = e.kind === "control_clue" && collusion.has(e.source);
+      const g = svgEl("g", { class: "gedge " + e.kind + (red ? " collusion" : "") });
       g.dataset.source = e.source; g.dataset.target = e.target;
-      const path = svgEl("path", { d: edgePath(a, b), fill: "none" });
+      const path = svgEl("path", { d: edgePath(a, b, widthOf(na), widthOf(nb)), fill: "none" });
       path.appendChild(svgEl("title", {}, e.kind === "control_clue"
         ? EDGE_LABEL[e.kind] + (e.via_person ? " · 经自然人关联 · 低置信" : "") + " · 须人工复核"
-        : EDGE_LABEL[e.kind] + (e.holding_pct ? " " + e.holding_pct : "")));
+        : EDGE_LABEL[e.kind]));
       g.appendChild(path);
-      if (e.holding_pct) {
+      if (e.kind === "semantic_match" && nb && nb.score) {
         g.appendChild(svgEl("text", {
-          x: (a.x + b.x) / 2 + NODE_W / 2,
-          y: (Math.min(a.y, b.y) + Math.max(a.y, b.y) + NODE_H) / 2 - 4,
+          x: (a.x + widthOf(na) / 2 + b.x + widthOf(nb) / 2) / 2,
+          y: (a.y + NODE_H + b.y) / 2,
           class: "pct",
-        }, e.holding_pct));
+        }, Number(nb.score).toFixed(2)));
       }
       root.appendChild(g);
       [e.source, e.target].forEach((id) => {
@@ -169,17 +159,18 @@
 
     payload.nodes.forEach((n) => {
       const p = xy.get(n.id);
+      const w = widthOf(n);
       const cls = ["gnode", n.kind, n.node_type === "person" ? "person" : "company"];
-      if (n.is_shared_controller) cls.push("shared");
+      if (collusion.has(n.id)) cls.push("collusion");
       const g = svgEl("g", { class: cls.join(" "), transform: `translate(${p.x} ${p.y})` });
       g.dataset.id = n.id;
       g.appendChild(svgEl("rect", {
-        width: NODE_W, height: NODE_H,
-        rx: n.node_type === "person" ? 4 : NODE_H / 2,  // 图例：○ 企业 / □ 自然人
+        width: w, height: NODE_H,
+        rx: n.kind === "query" ? 8 : n.node_type === "person" ? 4 : NODE_H / 2,  // ○ 企业 / □ 自然人
       }));
       g.appendChild(svgEl("text", {
-        x: NODE_W / 2, y: NODE_H / 2 + 4, "text-anchor": "middle",
-      }, short(n.name, 10)));
+        x: w / 2, y: NODE_H / 2 + 4, "text-anchor": "middle",
+      }, short(n.name, n.kind === "query" ? 14 : 10)));
       g.addEventListener("mouseenter", (ev) => showTooltip(n, ev));
       g.addEventListener("mousemove", moveTooltip);
       g.addEventListener("mouseleave", hideTooltip);
@@ -192,7 +183,6 @@
     panel.classList.add("has-data");
     legendEl.hidden = false;
     emptyEl.hidden = true;
-    footEl.hidden = !payload.truncated;
     toggleBtn.hidden = false;
     // 窄屏抽屉默认藏在画面外：图谱到达时自动弹出，否则用户无感知
     if (matchMedia("(max-width: 1100px)").matches) panel.classList.add("open");
@@ -206,7 +196,6 @@
     panel.classList.remove("has-data", "open");
     legendEl.hidden = true;
     emptyEl.hidden = false;
-    footEl.hidden = true;
     toggleBtn.hidden = true;
   }
 

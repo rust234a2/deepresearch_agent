@@ -193,35 +193,37 @@ textarea#q::placeholder { color: var(--muted); }
 .graph-legend[hidden], .graph-empty[hidden] { display: none; }
 .graph-legend .lg { display: inline-flex; align-items: center; gap: 5px; }
 .graph-legend .lg::before { content: ""; width: 14px; height: 9px; border: 1.5px solid var(--line-strong); background: var(--surface); }
+.graph-legend .query::before { border-radius: 3px; border-color: var(--accent); background: var(--accent); }
 .graph-legend .pill::before { border-radius: 999px; }
 .graph-legend .square::before { border-radius: 2px; }
 .graph-legend .solid::before { height: 0; border: 0; border-top: 2px solid var(--line-strong); }
 .graph-legend .dashed::before { height: 0; border: 0; border-top: 2px dashed var(--line-strong); }
-.graph-legend .shared::before { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, var(--surface)); }
+.graph-legend .collusion::before { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, var(--surface)); }
 .graph-canvas-wrap { position: relative; flex: 1 1 auto; min-height: 0; }
 #graph-svg { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
 #graph-svg:active { cursor: grabbing; }
 .graph-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 0 22px; color: var(--muted); font-size: 12.5px; line-height: 1.7; text-align: center; }
 .graph-tooltip { position: absolute; z-index: 5; max-width: 200px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); color: var(--fg-soft); font-size: 12px; line-height: 1.6; white-space: pre-line; pointer-events: none; }
-.graph-foot { margin: 0; padding: 8px 14px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
 
 /* 图谱 SVG 元素（颜色全部走主题变量） */
 .gnode { cursor: pointer; }
 .gnode rect { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.4; }
 .gnode text { fill: var(--fg-soft); font: 600 12px var(--sans); }
+.gnode.query rect { fill: var(--accent); stroke: var(--accent-ink); }
+.gnode.query text { fill: #fff; }
 .gnode.seed rect { fill: var(--accent-soft); stroke: var(--accent); }
 .gnode.seed text { fill: var(--accent-ink); }
 .gnode.controller rect { fill: var(--warn-soft); stroke: var(--warn-line); }
-.gnode.shared rect { fill: color-mix(in srgb, var(--bad) 10%, var(--surface)); stroke: var(--bad); }
-.gnode.shared text { fill: var(--bad); }
+.gnode.collusion rect { fill: color-mix(in srgb, var(--bad) 10%, var(--surface)); stroke: var(--bad); }
+.gnode.collusion text { fill: var(--bad); }
 .gedge path { stroke: var(--line-strong); stroke-width: 1.4; }
 .gedge.control_clue path { stroke-dasharray: 5 4; }
-.gedge.shared path { stroke: var(--bad); }
+.gedge.collusion path { stroke: var(--bad); }
 .gedge .pct { fill: var(--muted); font: 10.5px var(--mono); text-anchor: middle; }
 #graph-svg.has-sel .gedge:not(.hl) { opacity: .18; }
 #graph-svg.has-sel .gnode:not(.sel) { opacity: .3; }
 .gedge.hl path { stroke: var(--accent); stroke-width: 2; }
-.gedge.shared.hl path { stroke: var(--bad); }
+.gedge.collusion.hl path { stroke: var(--bad); }
 
 /* 窄屏：面板变覆盖式抽屉，顶栏出现开关 */
 .graph-toggle { display: none; }
