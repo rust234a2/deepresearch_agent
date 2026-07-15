@@ -189,6 +189,8 @@ textarea#q::placeholder { color: var(--muted); }
 .graph-title { font-size: 14px; font-weight: 700; letter-spacing: .01em; }
 .graph-sub { margin-top: 2px; color: var(--warn); font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em; }
 .graph-legend { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 0 14px 10px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+/* 显式 display 会盖掉 [hidden] 的 UA 规则，这里补回 */
+.graph-legend[hidden], .graph-empty[hidden] { display: none; }
 .graph-legend .lg { display: inline-flex; align-items: center; gap: 5px; }
 .graph-legend .lg::before { content: ""; width: 14px; height: 9px; border: 1.5px solid var(--line-strong); background: var(--surface); }
 .graph-legend .pill::before { border-radius: 999px; }

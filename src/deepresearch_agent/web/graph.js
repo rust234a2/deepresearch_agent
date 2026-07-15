@@ -32,17 +32,19 @@
   }
   const short = (s, max) => (s && s.length > max ? s.slice(0, max - 1) + "…" : s || "");
 
-  // ---- 布局：kind 定行（共享控制人 / 控制人+股东 / 种子 / 对外投资），列按相连种子聚簇 ----
+  // ---- 布局：kind 定层（共享控制人 / 控制人+股东 / 种子 / 对外投资），列按相连种子聚簇；
+  //      每层最多 MAX_COLS 列自动换行，避免上百节点排成一行导致全图适配后不可见 ----
+  const MAX_COLS = 10;
   function layout(payload) {
-    const rowOf = (n) => {
+    const layerOf = (n) => {
       if (n.kind === "seed") return 2;
       if (n.kind === "investment") return 3;
       return n.is_shared_controller ? 0 : 1;
     };
-    const rows = [[], [], [], []];
-    payload.nodes.forEach((n) => rows[rowOf(n)].push(n));
-    rows[2].sort((a, b) => (b.score - a.score) || (a.id < b.id ? -1 : 1));
-    const seedCol = new Map(rows[2].map((n, i) => [n.id, i]));
+    const layers = [[], [], [], []];
+    payload.nodes.forEach((n) => layers[layerOf(n)].push(n));
+    layers[2].sort((a, b) => (b.score - a.score) || (a.id < b.id ? -1 : 1));
+    const seedCol = new Map(layers[2].map((n, i) => [n.id, i]));
     const anchors = new Map();
     payload.edges.forEach((e) => {
       const seed = seedCol.has(e.source) ? e.source : (seedCol.has(e.target) ? e.target : null);
@@ -56,21 +58,23 @@
       return a && a.length ? a.reduce((x, y) => x + y, 0) / a.length : Number.MAX_SAFE_INTEGER;
     };
     [0, 1, 3].forEach((r) =>
-      rows[r].sort((a, b) => (anchorOf(a.id) - anchorOf(b.id)) || (a.id < b.id ? -1 : 1)));
+      layers[r].sort((a, b) => (anchorOf(a.id) - anchorOf(b.id)) || (a.id < b.id ? -1 : 1)));
 
-    const liveRows = [0, 1, 2, 3].filter((r) => rows[r].length);
-    const rowY = new Map(liveRows.map((r, i) => [r, PAD + i * ROW_GAP]));
-    const cols = Math.max(...liveRows.map((r) => rows[r].length));
+    const visualRows = [];
+    layers.forEach((layer) => {
+      for (let i = 0; i < layer.length; i += MAX_COLS) visualRows.push(layer.slice(i, i + MAX_COLS));
+    });
+    const cols = Math.max(...visualRows.map((r) => r.length));
     const width = PAD * 2 + cols * NODE_W + (cols - 1) * GAP_X;
     const xy = new Map();
-    liveRows.forEach((r) => {
-      const rowW = rows[r].length * NODE_W + (rows[r].length - 1) * GAP_X;
-      rows[r].forEach((n, i) => xy.set(n.id, {
+    visualRows.forEach((row, ri) => {
+      const rowW = row.length * NODE_W + (row.length - 1) * GAP_X;
+      row.forEach((n, i) => xy.set(n.id, {
         x: (width - rowW) / 2 + i * (NODE_W + GAP_X),
-        y: rowY.get(r),
+        y: PAD + ri * ROW_GAP,
       }));
     });
-    return { xy, width, height: PAD * 2 + (liveRows.length - 1) * ROW_GAP + NODE_H };
+    return { xy, width, height: PAD * 2 + (visualRows.length - 1) * ROW_GAP + NODE_H };
   }
 
   function edgePath(a, b) {
@@ -190,6 +194,8 @@
     emptyEl.hidden = true;
     footEl.hidden = !payload.truncated;
     toggleBtn.hidden = false;
+    // 窄屏抽屉默认藏在画面外：图谱到达时自动弹出，否则用户无感知
+    if (matchMedia("(max-width: 1100px)").matches) panel.classList.add("open");
   }
 
   function clear() {

@@ -77,3 +77,9 @@ def test_web_script_wires_graph_subgraph_event(company_database_path, tmp_path):
     assert 'event === "graph_subgraph"' in r.text
     assert "GraphPanel.render" in r.text
     assert "GraphPanel.clear" in r.text
+
+
+def test_graph_js_auto_opens_drawer_on_narrow_viewport(company_database_path, tmp_path):
+    r = _client(company_database_path, tmp_path).get("/static/graph.js")
+    # 窄屏（≤1100px）抽屉模式下，图谱数据到达须自动弹出，否则用户无感知
+    assert 'classList.add("open")' in r.text
