@@ -41,9 +41,12 @@
     layers[1].sort((a, b) => (b.score - a.score) || (a.id < b.id ? -1 : 1));
     layers[2].sort((a, b) => (a.id < b.id ? -1 : 1));
 
+    // 列数自适应节点规模：少节点收紧成近方形，图形在面板里更大更可读
+    const wrapCols = Math.min(MAX_COLS,
+      Math.max(3, Math.round(Math.sqrt((payload.nodes.length - 1) * 2))));
     const visualRows = [];
     layers.forEach((layer) => {
-      for (let i = 0; i < layer.length; i += MAX_COLS) visualRows.push(layer.slice(i, i + MAX_COLS));
+      for (let i = 0; i < layer.length; i += wrapCols) visualRows.push(layer.slice(i, i + wrapCols));
     });
     const rowWidth = (row) =>
       row.reduce((w, n) => w + widthOf(n), 0) + (row.length - 1) * GAP_X;
