@@ -70,3 +70,10 @@ def test_static_graph_js_served(company_database_path, tmp_path):
     assert r.status_code == 200
     assert "window.GraphPanel" in r.text
     assert "认定" not in r.text  # 数据红线：面板代码不含认定式文案
+
+
+def test_web_script_wires_graph_subgraph_event(company_database_path, tmp_path):
+    r = _client(company_database_path, tmp_path).get("/static/app.js")
+    assert 'event === "graph_subgraph"' in r.text
+    assert "GraphPanel.render" in r.text
+    assert "GraphPanel.clear" in r.text

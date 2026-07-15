@@ -108,6 +108,7 @@
     if (pending) return;
     sessionId = id;
     entries = Array.isArray(transcripts[id]) ? transcripts[id] : [];
+    if (window.GraphPanel) GraphPanel.clear();
     greeting();
     renderSessions();
     setSidebarOpen(false);
@@ -117,6 +118,7 @@
     if (pending) return;
     sessionId = null;
     entries = [];
+    if (window.GraphPanel) GraphPanel.clear();
     greeting();
     renderSessions();
     setSidebarOpen(false);
@@ -140,6 +142,7 @@
       if (sessionId === item.session_id) {
         sessionId = null;
         entries = [];
+        if (window.GraphPanel) GraphPanel.clear();
         greeting();
         q.focus();
       }
@@ -411,6 +414,9 @@
           renderSessions();
         }
         else if (event === "progress") thinking.lastChild.textContent = data.message;
+        else if (event === "graph_subgraph") {
+          if (window.GraphPanel) GraphPanel.render(data);
+        }
         else if (event === "report_start") {
           thinking.remove();
           streamed = createStreamingMessage();
@@ -490,6 +496,7 @@
       sessionId = null;
       entries = [];
       transcripts = loadTranscripts();
+      if (window.GraphPanel) GraphPanel.clear();
       greeting();
       loadSessions();
     }
