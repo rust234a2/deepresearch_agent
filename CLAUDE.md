@@ -65,6 +65,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .\.conda-env\python.exe -m uvicorn deepresearch_agent.api:app --reload
 # 起服务后浏览器开 http://127.0.0.1:8000/ 即为对外演示聊天界面（自包含 vanilla 页：GET / + /static，多轮指代/加载态/结构化报告卡）
 # 网页流式端点 /session/turn/stream 的呈现层走 DeepSeek 生成：有 DEEPSEEK_API_KEY 用 LLM 逐 token 流式，无 key 回退确定性文本；结论句由后端硬发不受 LLM 影响（纵深防御）。Neo4j 默认密码 devpassword（对齐 docker-compose，仅本地）
+# graph 模式轮次会先推 SSE 事件 graph_subgraph（检索子图节点/边），网页右侧面板据此渲染股权图谱线索（线索级、须人工复核）
 
 # Eval v1 确定性评测（企业识别 P/R = 零下载 CI 核心；scope recall@k 需 bge、标 slow）
 .\.conda-env\python.exe -m deepresearch_agent.cli eval entity `
