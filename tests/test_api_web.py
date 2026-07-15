@@ -55,3 +55,18 @@ def test_research_endpoint_unchanged(company_database_path, tmp_path):
     r = _client(company_database_path, tmp_path).post("/research", json={"question": ENTITY})
     assert r.status_code == 200
     assert r.json()["supplier_name"] == ENTITY
+
+
+def test_web_includes_graph_panel(company_database_path, tmp_path):
+    r = _client(company_database_path, tmp_path).get("/")
+    assert 'id="graph-panel"' in r.text
+    assert "线索级证据 · 须人工复核" in r.text
+    assert 'id="graph-toggle"' in r.text
+    assert "/static/graph.js" in r.text
+
+
+def test_static_graph_js_served(company_database_path, tmp_path):
+    r = _client(company_database_path, tmp_path).get("/static/graph.js")
+    assert r.status_code == 200
+    assert "window.GraphPanel" in r.text
+    assert "认定" not in r.text  # 数据红线：面板代码不含认定式文案
