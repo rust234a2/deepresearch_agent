@@ -675,3 +675,45 @@ def test_writer_graph_summary_flags_collusion(company_database_path):
     ]
     updated = writer_node(state, DOMAIN_PACK)
     assert "同行业+同控制人" in updated.graph_report.summary
+
+
+def test_retrieve_graph_populates_subgraph():
+    from deepresearch_agent.agents.nodes import _retrieve_graph
+    from deepresearch_agent.graph_retrieval import HybridContext, SeedContext
+    from deepresearch_agent.graph_traversal import ControllerResult
+    from deepresearch_agent.ownership_backend import NeighborEdge
+
+    def searcher(query):
+        return HybridContext(query=query, seeds=[SeedContext(
+            code="X", name="示例", score=0.9,
+            controllers=[ControllerResult(node_id="person:张三", display_name="张三",
+                                          depth=1, via_person=True)],
+            neighbors=[NeighborEdge(node_id="ext:基金", name="基金", node_type="company",
+                                    edge_type="shareholding", direction="in",
+                                    holding_pct="60%")],
+        )], shared_controllers=[])
+
+    state = ResearchState(question="q", domain="procurement")
+    assert _retrieve_graph(state, searcher) is None
+    assert state.graph_subgraph is not None
+    assert {n.id for n in state.graph_subgraph.nodes} == {"X", "person:张三", "ext:基金"}
+    assert len(state.graph_subgraph.edges) == 2
+
+
+def test_graph_runtime_failure_leaves_subgraph_none(company_database_path):
+    repository = _repository(company_database_path)
+    state = planner_node(
+        ResearchState(question="哪些做注塑的供应商互相关联", domain="procurement"),
+        DOMAIN_PACK, repository,
+    )
+
+    def boom(query):
+        raise RuntimeError("graph down")
+
+    updated = researcher_node(
+        state, ToolRegistry(), DOMAIN_PACK,
+        scope_retriever=_ScopeRetriever(), graph_searcher=boom,
+        scope_enabled=True, graph_enabled=True,
+    )
+    assert updated.retrieval_mode == "scope"  # 降级路径
+    assert updated.graph_subgraph is None

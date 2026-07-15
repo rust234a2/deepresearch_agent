@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from deepresearch_agent.company_repository import CompanyRepository
 from deepresearch_agent.domain import DomainPack
+from deepresearch_agent.graph_retrieval import project_subgraph
 from deepresearch_agent.query_complexity import classify_complexity
 from deepresearch_agent.state import (
     Citation,
@@ -241,6 +242,7 @@ def _retrieve_graph(state: ResearchState, searcher) -> str | None:
     candidates, shared = _build_graph_findings(context)
     state.graph_candidates = candidates
     state.shared_controllers = shared
+    state.graph_subgraph = project_subgraph(context)
     return None
 
 
