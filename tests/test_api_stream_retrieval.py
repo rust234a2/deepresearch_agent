@@ -194,3 +194,71 @@ def _reassemble(sse_body: str) -> str:
             if "text" in d:
                 out += d["text"]
     return out
+
+
+def _event_payload(body: str, event: str):
+    import json
+    lines = body.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() == f"event: {event}":
+            return json.loads(lines[i + 1].removeprefix("data:").strip())
+    return None
+
+
+def test_stream_emits_graph_subgraph_before_report(company_database_path, tmp_path, monkeypatch):
+    from deepresearch_agent.agents import graph as graph_module
+    from deepresearch_agent.graph_retrieval import HybridContext, SeedContext
+    from deepresearch_agent.graph_traversal import ControllerResult
+    from deepresearch_agent.ownership_backend import NeighborEdge
+
+    def build_scope(database_path, index_path):
+        return _ScopeRetriever()
+
+    def build_graph(database_path, scope_retriever):
+        def search(query):
+            return HybridContext(query=query, seeds=[SeedContext(
+                code="91330000123456789X", name="示例科技股份有限公司", score=0.95,
+                controllers=[ControllerResult(node_id="person:张三", display_name="张三",
+                                              depth=1, via_person=True)],
+                neighbors=[NeighborEdge(node_id="person:张三", name="张三", node_type="person",
+                                        edge_type="shareholding", direction="in",
+                                        holding_pct="60%")],
+            )], shared_controllers=[])
+        return search
+
+    monkeypatch.setattr(graph_module, "_build_scope_retriever", build_scope)
+    monkeypatch.setattr(graph_module, "_build_graph_searcher", build_graph)
+    client = _client(company_database_path, tmp_path, polisher=None,
+                     enable_scope=True, enable_graph=True)
+
+    with client.stream("POST", "/session/turn/stream",
+                       json={"question": "哪些做注塑的供应商互相关联", "user_id": "alice"}) as r:
+        body = "".join(r.iter_text())
+
+    assert "event: graph_subgraph" in body
+    assert body.index("event: graph_subgraph") < body.index("event: report_start")
+    payload = _event_payload(body, "graph_subgraph")
+    assert {n["id"] for n in payload["nodes"]} == {"91330000123456789X", "person:张三"}
+    assert payload["truncated"] is False
+
+
+def test_stream_named_mode_has_no_graph_subgraph_event(company_database_path, tmp_path):
+    client = _client(company_database_path, tmp_path, polisher=None)
+    with client.stream("POST", "/session/turn/stream",
+                       json={"question": "示例科技股份有限公司", "user_id": "alice"}) as r:
+        body = "".join(r.iter_text())
+    assert "graph_subgraph" not in body
+
+
+def test_stream_scope_mode_has_no_graph_subgraph_event(company_database_path, tmp_path, monkeypatch):
+    from deepresearch_agent.agents import graph as graph_module
+
+    monkeypatch.setattr(graph_module, "_build_scope_retriever",
+                        lambda database_path, index_path: _ScopeRetriever())
+    client = _client(company_database_path, tmp_path, polisher=None,
+                     enable_scope=True, enable_graph=False)
+    with client.stream("POST", "/session/turn/stream",
+                       json={"question": "哪些企业能做注塑成型", "user_id": "alice"}) as r:
+        body = "".join(r.iter_text())
+    assert "graph_subgraph" not in body
+    assert "event: report_start" in body

@@ -197,6 +197,12 @@ def create_app(
                     session.title = request.question
                 store.save(session)
                 report_type, report = _resolve_report(state)
+                if (
+                    state.retrieval_mode == "graph"
+                    and state.graph_subgraph is not None
+                    and state.graph_subgraph.nodes
+                ):
+                    yield _sse("graph_subgraph", state.graph_subgraph.model_dump())
                 yield _sse("report_start", {
                     "report_type": report_type,
                     "title": report.get("supplier_name") or report.get("query", ""),
