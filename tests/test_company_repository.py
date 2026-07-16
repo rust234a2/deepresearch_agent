@@ -406,3 +406,10 @@ def test_iter_aliases_returns_all_code_alias_pairs(company_database_path):
     assert ("91330000123456789X", "示例设备有限公司") in pairs
     # 确定性：按 (code, alias) 升序
     assert pairs == sorted(pairs)
+
+
+def test_iter_business_scopes_returns_code_scope_pairs(company_database_path):
+    repo = CompanyRepository(company_database_path)
+    scopes = dict(repo.iter_business_scopes())
+    assert len(scopes) == len(repo.get_all_company_names())
+    assert "工业设备制造" in scopes["91330000123456789X"]

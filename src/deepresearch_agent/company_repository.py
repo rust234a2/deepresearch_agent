@@ -234,6 +234,16 @@ class CompanyRepository:
             ).fetchall()
         return [(row["unified_social_credit_code"], row["alias"]) for row in rows]
 
+    def iter_business_scopes(self) -> list[tuple[str, str]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT unified_social_credit_code, business_scope FROM companies"
+            ).fetchall()
+        return [
+            (row["unified_social_credit_code"], row["business_scope"] or "")
+            for row in rows
+        ]
+
     def iter_company_industries(self) -> list[CompanyIndustry]:
         with self._connect() as connection:
             rows = connection.execute(
