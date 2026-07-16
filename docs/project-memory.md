@@ -6,6 +6,7 @@
 
 ## 最新更新
 
+- **Eval C1 扰动鲁棒性评测**（见已完成模块第 33 条）：真库结果 overall_recovery=0.86——格式类变形（去后缀/整句/全半角）recovery=1.00，相邻字对调 recovery=0.56/miss=0.44（错字类无模糊匹配的真实缺口），wrong 恒 0。C2 混合 scope 评测下一段。
 - Web 对话侧栏支持删除历史会话：前端二次确认后调用 `DELETE /sessions/{session_id}?user_id=...`，后端按会话 owner 校验并删除 JSON 持久化记录，同时清理浏览器中该会话的本地转录；不存在或非 owner 一律返回 404，非法会话 ID 返回 400。
 
 ## 用户协作偏好
@@ -68,6 +69,8 @@
 31. **网页流式对话去除固定结论横幅**：`recommendation="insufficient_evidence"` 继续保留在结构化报告中，作为当前数据源不足以支持采购判断的内部语义；但 `/session/turn/stream` 不再向用户每轮强制追加「结论：证据不足，不能据此作出采购批准或风险结论」。DeepSeek 呈现 prompt 与确定性回退文本均仅展示已检索事实、候选、线索和待接入数据，避免固定结论淹没正常查询结果。
 
 32. **关系检索中性展示**：网页和报告输出删除「（疑·须人工复核）」及所有“疑似/须人工复核/线索级”措辞。GraphRAG 保留候选企业、最终控制人、自然人或企业股权路径、同行业+同控制人等关系事实；`via_person` 等路径字段仍在结构化数据中保留，供系统内部区分来源，不作为对话提示语展示。
+
+33. **Eval C1 扰动鲁棒性评测**（新 `eval/perturb.py` + `golden_gen`/`metrics`/`runner`/CLI/脚本扩展，分支 `feature/eval-c1-perturbation`）：给企业识别补“真实输入变形”评测，量化 `resolve_supplier` 对用户实际打法的鲁棒性。**来源法真值**（每条扰动从已知企业 X 生成、理想答案恒解析到 X；种子唯一性用**独立粗粒度子串扫描**保证——非 resolver 两段式逻辑，故非循环）。四扰动类型：`drop_suffix`（去后缀）/`transpose`（相邻字对调，错字确定性代理、不引混淆字典）/`width_variant`（ASCII 转全角，NFKC 应吸收）/`noise_wrap`（整句包裹）。`perturbation_metrics` 按类型算 recovery/wrong/miss（`resolve_supplier` 返回=源 X 为回收、别家为误解析、not_found/ambiguous 为漏解析），CLI `eval perturb` 打印按类型表、无真名。起草脚本 stdout 只回条数，真名进 gitignored `perturbation.local.yaml`。**真库结果（3506 家、seed=20260716、79 条）**：overall_recovery=0.86；去后缀/整句/全半角 recovery=1.00（格式变形完全鲁棒），**相邻字对调 recovery=0.56 / miss=0.44（错字类无模糊匹配的真实缺口，但长词干 ≥4 字连续片段兜底救回过半，非全崩）**；wrong 恒 0（从不误解析别家，符合绝不猜测）；width_variant 真库仅 4 例（名含 ASCII 者少）。全确定性、零 LLM、零网络；合成 golden `perturbation.synthetic.yaml` 提交、真库 `.local.yaml` 不出库；默认测试集 304 passed。设计/计划见 `docs/superpowers/specs/2026-07-16-eval-c1-perturbation-c2-hybrid-scope-design.md` 与 `docs/superpowers/plans/2026-07-16-eval-c1-perturbation-robustness.md`。**下一段 C2 混合 scope 评测**（词面确定性下界 + DeepSeek 判官补语义命中）待做。
 
 ## 本地数据状态
 
