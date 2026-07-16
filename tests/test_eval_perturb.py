@@ -1,7 +1,9 @@
 import random
 
 from deepresearch_agent.eval.perturb import (
+    drop_char,
     drop_suffix,
+    homophone,
     noise_wrap,
     transpose,
     width_variant,
@@ -39,3 +41,23 @@ def test_width_variant_converts_ascii_to_fullwidth():
 
 def test_noise_wrap_wraps_into_sentence():
     assert noise_wrap("示例科技股份有限公司") == "核验示例科技股份有限公司的工商信息"
+
+
+def test_homophone_substitutes_first_mapped_char():
+    # 词干 "示例科技" 里 "科"→"颗"（同音），后缀保留
+    assert homophone("示例科技股份有限公司") == "示例颗技股份有限公司"
+
+
+def test_homophone_none_when_no_mapped_char():
+    assert homophone("甲乙丙有限公司") is None
+
+
+def test_drop_char_removes_one_stem_char():
+    result = drop_char("示例科技股份有限公司", random.Random(0))
+    assert result is not None
+    assert result.endswith("股份有限公司")
+    assert len(result) == len("示例科技股份有限公司") - 1
+
+
+def test_drop_char_none_when_stem_too_short():
+    assert drop_char("AB公司", random.Random(0)) is None  # 词干 "AB" 2 字 < 3
