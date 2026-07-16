@@ -126,8 +126,11 @@ def _eval_main(argv: list[str]) -> None:
     from deepresearch_agent.eval.runner import (
         load_entity_cases,
         load_scope_cases,
+        load_scope_query_cases,
         run_entity_resolution,
         run_perturbation_robustness,
+        run_scope_judged,
+        run_scope_lexical,
         run_scope_recall,
     )
 
@@ -146,6 +149,12 @@ def _eval_main(argv: list[str]) -> None:
     p_scope.add_argument("--database", required=True)
     p_scope.add_argument("--index", required=True)
     p_scope.add_argument("--cases", required=True)
+
+    p_scope_quality = sub.add_parser("scope-quality", help="scope 混合评测（词面 + DeepSeek 判官）")
+    p_scope_quality.add_argument("--database", required=True)
+    p_scope_quality.add_argument("--index", required=True)
+    p_scope_quality.add_argument("--cases", required=True)
+    p_scope_quality.add_argument("--judge", action="store_true")
 
     args = parser.parse_args(argv)
     console = Console()
@@ -168,7 +177,7 @@ def _eval_main(argv: list[str]) -> None:
                 f"  {t.perturbation_type:14} n={t.n}  recovery={t.recovery:.2f}  "
                 f"wrong={t.wrong:.2f}  miss={t.miss:.2f}"
             )
-    else:
+    elif args.kind == "scope":
         from deepresearch_agent.rag.embedding import BgeEmbedder
         from deepresearch_agent.rag.retriever import load_scope_retriever
 
@@ -179,6 +188,33 @@ def _eval_main(argv: list[str]) -> None:
             f"  cases={m.total}  mean_recall_at_k={m.mean_recall_at_k:.2f}  "
             f"mean_precision_at_k={m.mean_precision_at_k:.2f}"
         )
+    else:  # scope-quality
+        from deepresearch_agent.rag.embedding import BgeEmbedder
+        from deepresearch_agent.rag.retriever import load_scope_retriever
+
+        repository = CompanyRepository(args.database)
+        retriever = load_scope_retriever(args.database, args.index, BgeEmbedder())
+        cases = load_scope_query_cases(args.cases)
+        lex = run_scope_lexical(retriever, repository, cases)
+        console.print("[bold]Eval: scope quality — lexical (procurement)[/bold]")
+        console.print(
+            f"  cases={lex.total}  lexical_precision@k={lex.mean_lexical_precision_at_k:.2f}  "
+            f"lexical_recall@k(下界)={lex.mean_lexical_recall_at_k:.2f}  "
+            f"lexical_tp(均)={lex.mean_lexical_tp_count:.1f}"
+        )
+        if args.judge:
+            from deepresearch_agent.eval.scope_judge import build_deepseek_scope_judge
+
+            judge = build_deepseek_scope_judge()
+            if judge is None:
+                console.print("  [judge] 无 DEEPSEEK_API_KEY 或缺 openai，跳过判官层")
+            else:
+                jm = run_scope_judged(retriever, repository, judge, cases)
+                console.print("[bold]Eval: scope quality — DeepSeek judge[/bold]")
+                console.print(
+                    f"  cases={jm.total}  judged_precision@k={jm.mean_judged_precision_at_k:.2f}  "
+                    f"noise@k={jm.mean_noise_at_k:.2f}  semantic_gain@k={jm.mean_semantic_gain_at_k:.2f}"
+                )
 
 
 def run_chat_loop(session, memory, read_line, emit, run_turn) -> None:
