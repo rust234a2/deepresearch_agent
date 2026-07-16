@@ -40,3 +40,40 @@ def test_scope_metrics_partial_and_zero():
     assert m.total == 2
     assert m.mean_recall_at_k == 0.25             # (0.5 + 0.0) / 2
     assert m.mean_precision_at_k == 0.25          # (0.5 + 0.0) / 2
+
+
+def test_perturbation_metrics_groups_by_type():
+    from deepresearch_agent.eval.metrics import perturbation_metrics
+
+    def _p(cid, ptype, code="X"):
+        return GoldenEntityCase(
+            case_id=cid,
+            question="q",
+            expected_status="resolved",
+            expected_code=code,
+            perturbation_type=ptype,
+        )
+
+    cases = [
+        _p("drop_suffix_0", "drop_suffix"),
+        _p("drop_suffix_1", "drop_suffix"),
+        _p("transpose_0", "transpose"),
+    ]
+    resolutions = [
+        CompanyResolution(status="resolved", unified_social_credit_code="X"),  # recovery
+        CompanyResolution(status="resolved", unified_social_credit_code="Y"),  # wrong
+        CompanyResolution(status="not_found"),                                  # miss
+    ]
+    m = perturbation_metrics(cases, resolutions)
+
+    assert m.total == 3
+    assert m.overall_recovery == 1 / 3
+    by_type = {t.perturbation_type: t for t in m.per_type}
+    assert by_type["drop_suffix"].n == 2
+    assert by_type["drop_suffix"].recovery == 0.5
+    assert by_type["drop_suffix"].wrong == 0.5
+    assert by_type["drop_suffix"].miss == 0.0
+    assert by_type["transpose"].n == 1
+    assert by_type["transpose"].miss == 1.0
+    # per_type 按扰动类型名排序，稳定输出
+    assert [t.perturbation_type for t in m.per_type] == ["drop_suffix", "transpose"]

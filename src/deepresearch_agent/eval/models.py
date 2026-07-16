@@ -11,6 +11,7 @@ class GoldenEntityCase(BaseModel):
     expected_status: Literal["resolved", "ambiguous", "not_found"]
     expected_code: str | None = None
     expected_candidate_codes: list[str] = Field(default_factory=list)
+    perturbation_type: str | None = None
 
 
 class GoldenScopeCase(BaseModel):
@@ -31,3 +32,17 @@ class ScopeRecallMetrics(BaseModel):
     total: int
     mean_recall_at_k: float
     mean_precision_at_k: float
+
+
+class PerturbationTypeMetrics(BaseModel):
+    perturbation_type: str
+    n: int
+    recovery: float
+    wrong: float
+    miss: float
+
+
+class PerturbationRobustnessMetrics(BaseModel):
+    total: int
+    overall_recovery: float
+    per_type: list[PerturbationTypeMetrics]

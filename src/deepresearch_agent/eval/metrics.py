@@ -5,6 +5,8 @@ from deepresearch_agent.eval.models import (
     EntityResolutionMetrics,
     GoldenEntityCase,
     GoldenScopeCase,
+    PerturbationRobustnessMetrics,
+    PerturbationTypeMetrics,
     ScopeRecallMetrics,
 )
 
@@ -50,4 +52,44 @@ def scope_recall_metrics(
         total=total,
         mean_recall_at_k=sum(recalls) / total if total else 1.0,
         mean_precision_at_k=sum(precisions) / total if total else 0.0,
+    )
+
+
+def perturbation_metrics(
+    cases: list[GoldenEntityCase], resolutions: list[CompanyResolution]
+) -> PerturbationRobustnessMetrics:
+    grouped: dict[str, list[tuple[GoldenEntityCase, CompanyResolution]]] = {}
+    for case, res in zip(cases, resolutions):
+        grouped.setdefault(case.perturbation_type or "", []).append((case, res))
+
+    per_type: list[PerturbationTypeMetrics] = []
+    total = 0
+    total_recovered = 0
+    for ptype in sorted(grouped):
+        pairs = grouped[ptype]
+        n = len(pairs)
+        recovery = wrong = miss = 0
+        for case, res in pairs:
+            if res.status == "resolved" and res.unified_social_credit_code == case.expected_code:
+                recovery += 1
+            elif res.status == "resolved":
+                wrong += 1
+            else:
+                miss += 1
+        per_type.append(
+            PerturbationTypeMetrics(
+                perturbation_type=ptype,
+                n=n,
+                recovery=recovery / n,
+                wrong=wrong / n,
+                miss=miss / n,
+            )
+        )
+        total += n
+        total_recovered += recovery
+
+    return PerturbationRobustnessMetrics(
+        total=total,
+        overall_recovery=total_recovered / total if total else 1.0,
+        per_type=per_type,
     )
