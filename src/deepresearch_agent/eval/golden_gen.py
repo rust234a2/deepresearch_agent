@@ -8,6 +8,13 @@ import yaml
 from deepresearch_agent.company_database import normalize_company_name
 from deepresearch_agent.company_repository import _contains_name
 from deepresearch_agent.eval.models import GoldenEntityCase
+from deepresearch_agent.eval.perturb import (
+    _stem,
+    drop_suffix,
+    noise_wrap,
+    transpose,
+    width_variant,
+)
 
 
 def _build_name_index(
@@ -131,6 +138,8 @@ def _case_to_dict(case: GoldenEntityCase) -> dict:
         data["expected_code"] = case.expected_code
     if case.expected_candidate_codes:
         data["expected_candidate_codes"] = case.expected_candidate_codes
+    if case.perturbation_type is not None:
+        data["perturbation_type"] = case.perturbation_type
     return data
 
 
@@ -158,3 +167,101 @@ def write_golden(
         yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
     )
     return category_counts(cases)
+
+
+_PERTURBERS: tuple[str, ...] = ("drop_suffix", "transpose", "width_variant", "noise_wrap")
+
+
+def _apply_perturber(ptype: str, name: str, rng: random.Random) -> str | None:
+    if ptype == "drop_suffix":
+        return drop_suffix(name)
+    if ptype == "transpose":
+        return transpose(name, rng)
+    if ptype == "width_variant":
+        return width_variant(name)
+    if ptype == "noise_wrap":
+        return noise_wrap(name)
+    return None
+
+
+def _unique_stem_seeds(
+    company_names: dict[str, str], aliases: list[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """选词干（去后缀、≥4 字）在全库唯一的企业作种子。独立粗粒度子串扫描，非 resolver 逻辑。"""
+    corpus = [(code, normalize_company_name(legal)) for code, legal in company_names.items()]
+    corpus += [(code, normalize_company_name(alias)) for code, alias in aliases]
+    seeds: list[tuple[str, str]] = []
+    for code, legal in company_names.items():
+        stem = normalize_company_name(_stem(legal))
+        if len(stem) < 4:
+            continue
+        if any(other_code != code and stem in other_norm for other_code, other_norm in corpus):
+            continue
+        seeds.append((code, legal))
+    return sorted(seeds)
+
+
+def generate_perturbation_golden(
+    company_names: dict[str, str],
+    aliases: list[tuple[str, str]],
+    *,
+    seed: int = 20260716,
+    per_type_n: int = 25,
+) -> list[GoldenEntityCase]:
+    rng = random.Random(seed)
+    seeds = _unique_stem_seeds(company_names, aliases)
+    all_norm_names = [(code, normalize_company_name(n)) for code, n in company_names.items()]
+    cases: list[GoldenEntityCase] = []
+    for ptype in _PERTURBERS:
+        order = list(seeds)
+        rng.shuffle(order)
+        made = 0
+        for code, legal in order:
+            if made >= per_type_n:
+                break
+            perturbed = _apply_perturber(ptype, legal, rng)
+            if perturbed is None:
+                continue
+            nperturbed = normalize_company_name(perturbed)
+            # 来源纯净：跳过意外重引别家完整名的扰动
+            if any(oc != code and on and on in nperturbed for oc, on in all_norm_names):
+                continue
+            cases.append(
+                GoldenEntityCase(
+                    case_id=f"{ptype}_{made}",
+                    question=perturbed,
+                    expected_status="resolved",
+                    expected_code=code,
+                    perturbation_type=ptype,
+                )
+            )
+            made += 1
+    return cases
+
+
+def perturbation_category_counts(cases: list[GoldenEntityCase]) -> dict[str, int]:
+    counts = {ptype: 0 for ptype in _PERTURBERS}
+    for case in cases:
+        if case.perturbation_type in counts:
+            counts[case.perturbation_type] += 1
+    return counts
+
+
+def write_perturbation_golden(
+    repository,
+    output_path,
+    *,
+    seed: int = 20260716,
+    per_type_n: int = 25,
+) -> dict[str, int]:
+    cases = generate_perturbation_golden(
+        repository.get_all_company_names(),
+        repository.iter_aliases(),
+        seed=seed,
+        per_type_n=per_type_n,
+    )
+    payload = {"cases": [_case_to_dict(c) for c in cases]}
+    Path(output_path).write_text(
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
+    return perturbation_category_counts(cases)

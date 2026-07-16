@@ -159,3 +159,117 @@ def test_write_golden_writes_loadable_yaml_and_returns_counts_only(golden_repo, 
     cases = load_entity_cases(out)
     assert len(cases) == 7
     assert {c.expected_status for c in cases} == {"resolved", "ambiguous", "not_found"}
+
+
+# --- C1 扰动 golden ---
+
+_PERTURB_COMPANIES = [
+    {"code": _code(11), "legal_name": "泽塔精密仪器有限公司", "aliases": ""},
+    {"code": _code(12), "legal_name": "ABC智能装备有限公司", "aliases": ""},
+    # 词干 "西格玛传感器"(≥4 字) 是下一家全名的子串 → 唯一性扫描排除，不作种子
+    {"code": _code(13), "legal_name": "西格玛传感器有限公司", "aliases": ""},
+    {"code": _code(14), "legal_name": "西格玛传感器科技集团有限公司", "aliases": ""},
+]
+
+
+@pytest.fixture
+def perturb_repo(tmp_path) -> CompanyRepository:
+    src_lines = (FIXTURES / "companies.csv").read_text(encoding="utf-8-sig").splitlines()
+    header = src_lines[0].split(",")
+    template = next(csv.DictReader(src_lines))
+    comp_path = tmp_path / "companies.csv"
+    with comp_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=header)
+        writer.writeheader()
+        for company in _PERTURB_COMPANIES:
+            row = dict(template)
+            row["source_name"] = company["legal_name"]
+            row["legal_name"] = company["legal_name"]
+            row["unified_social_credit_code"] = company["code"]
+            row["aliases"] = company["aliases"]
+            writer.writerow(row)
+    cont_path = tmp_path / "contacts.csv"
+    with cont_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["unified_social_credit_code", "legal_name", "phones", "emails", "mailing_address"],
+        )
+        writer.writeheader()
+        for company in _PERTURB_COMPANIES:
+            writer.writerow(
+                {
+                    "unified_social_credit_code": company["code"],
+                    "legal_name": company["legal_name"],
+                    "phones": "",
+                    "emails": "",
+                    "mailing_address": "",
+                }
+            )
+    db_path = tmp_path / "companies.sqlite3"
+    build_company_database(comp_path, cont_path, db_path)
+    return CompanyRepository(db_path)
+
+
+def test_perturbation_golden_only_unique_stem_seeds(perturb_repo):
+    from deepresearch_agent.eval.golden_gen import generate_perturbation_golden
+
+    cases = generate_perturbation_golden(
+        perturb_repo.get_all_company_names(), perturb_repo.iter_aliases(), seed=1
+    )
+    # 西格玛传感器有限公司（词干是 "西格玛传感器科技集团有限公司" 的子串）不作种子
+    seed_codes = {c.expected_code for c in cases}
+    assert _code(13) not in seed_codes
+    # 泽塔、ABC 词干唯一 → 是种子
+    assert _code(11) in seed_codes
+    assert _code(12) in seed_codes
+
+
+def test_perturbation_golden_all_expected_resolved_with_type(perturb_repo):
+    from deepresearch_agent.eval.golden_gen import generate_perturbation_golden
+
+    cases = generate_perturbation_golden(
+        perturb_repo.get_all_company_names(), perturb_repo.iter_aliases(), seed=1
+    )
+    assert cases  # 非空
+    for c in cases:
+        assert c.expected_status == "resolved"
+        assert c.expected_code is not None
+        assert c.perturbation_type in {"drop_suffix", "transpose", "width_variant", "noise_wrap"}
+
+
+def test_perturbation_golden_width_variant_only_from_ascii_company(perturb_repo):
+    from deepresearch_agent.eval.golden_gen import generate_perturbation_golden
+
+    cases = generate_perturbation_golden(
+        perturb_repo.get_all_company_names(), perturb_repo.iter_aliases(), seed=1
+    )
+    width_cases = [c for c in cases if c.perturbation_type == "width_variant"]
+    # 只有 ABC 那家有 ASCII，能产出全半角扰动
+    assert width_cases
+    assert all(c.expected_code == _code(12) for c in width_cases)
+
+
+def test_perturbation_golden_deterministic(perturb_repo):
+    from deepresearch_agent.eval.golden_gen import generate_perturbation_golden
+
+    a = generate_perturbation_golden(
+        perturb_repo.get_all_company_names(), perturb_repo.iter_aliases(), seed=1
+    )
+    b = generate_perturbation_golden(
+        perturb_repo.get_all_company_names(), perturb_repo.iter_aliases(), seed=1
+    )
+    assert [c.model_dump() for c in a] == [c.model_dump() for c in b]
+
+
+def test_write_perturbation_golden_returns_counts_only(perturb_repo, tmp_path):
+    from deepresearch_agent.eval.golden_gen import write_perturbation_golden
+    from deepresearch_agent.eval.runner import load_entity_cases
+
+    out = tmp_path / "perturbation.local.yaml"
+    counts = write_perturbation_golden(perturb_repo, out, seed=1)
+    assert all(isinstance(v, int) for v in counts.values())
+    assert set(counts) == {"drop_suffix", "transpose", "width_variant", "noise_wrap"}
+    # 产出 yaml 能被评测 loader 读回，且带 perturbation_type
+    cases = load_entity_cases(out)
+    assert cases
+    assert all(c.perturbation_type is not None for c in cases)
