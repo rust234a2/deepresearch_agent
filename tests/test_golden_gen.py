@@ -273,3 +273,21 @@ def test_write_perturbation_golden_returns_counts_only(perturb_repo, tmp_path):
     cases = load_entity_cases(out)
     assert cases
     assert all(c.perturbation_type is not None for c in cases)
+
+
+def test_generate_perturbation_script_prints_counts_only(perturb_repo, tmp_path, capsys, monkeypatch):
+    # perturb_repo fixture 已在 tmp_path 下建好 companies.sqlite3，脚本直接读该库
+    db = tmp_path / "companies.sqlite3"
+    out = tmp_path / "perturbation.local.yaml"
+
+    scripts_dir = Path(__file__).parent.parent / "scripts"
+    monkeypatch.syspath_prepend(str(scripts_dir))
+    import generate_perturbation_golden as script
+
+    script.main(["--database", str(db), "--output", str(out), "--seed", "1"])
+    printed = capsys.readouterr().out
+    # 只回条数与文件名，绝不出现企业名
+    assert "泽塔精密仪器有限公司" not in printed
+    assert "ABC智能装备有限公司" not in printed
+    assert "drop_suffix=" in printed
+    assert out.exists()
