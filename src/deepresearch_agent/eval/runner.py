@@ -5,11 +5,16 @@ from pathlib import Path
 import yaml
 
 from deepresearch_agent.company_repository import CompanyRepository
-from deepresearch_agent.eval.metrics import entity_resolution_metrics, scope_recall_metrics
+from deepresearch_agent.eval.metrics import (
+    entity_resolution_metrics,
+    perturbation_metrics,
+    scope_recall_metrics,
+)
 from deepresearch_agent.eval.models import (
     EntityResolutionMetrics,
     GoldenEntityCase,
     GoldenScopeCase,
+    PerturbationRobustnessMetrics,
     ScopeRecallMetrics,
 )
 from deepresearch_agent.supplier_resolution import resolve_supplier
@@ -38,3 +43,10 @@ def run_scope_recall(retriever, cases: list[GoldenScopeCase]) -> ScopeRecallMetr
         for case in cases
     ]
     return scope_recall_metrics(cases, retrieved_per_case)
+
+
+def run_perturbation_robustness(
+    repository: CompanyRepository, cases: list[GoldenEntityCase]
+) -> PerturbationRobustnessMetrics:
+    resolutions = [resolve_supplier(case.question, repository) for case in cases]
+    return perturbation_metrics(cases, resolutions)

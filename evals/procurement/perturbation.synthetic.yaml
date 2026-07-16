@@ -1,0 +1,16 @@
+cases:
+  - case_id: drop_suffix_0
+    question: 示例科技
+    expected_status: resolved
+    expected_code: 91330000123456789X
+    perturbation_type: drop_suffix
+  - case_id: noise_wrap_0
+    question: 核验示例科技股份有限公司的工商信息
+    expected_status: resolved
+    expected_code: 91330000123456789X
+    perturbation_type: noise_wrap
+  - case_id: transpose_0
+    question: 例示科技股份有限公司
+    expected_status: resolved
+    expected_code: 91330000123456789X
+    perturbation_type: transpose
