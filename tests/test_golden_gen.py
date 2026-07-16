@@ -234,7 +234,14 @@ def test_perturbation_golden_all_expected_resolved_with_type(perturb_repo):
     for c in cases:
         assert c.expected_status == "resolved"
         assert c.expected_code is not None
-        assert c.perturbation_type in {"drop_suffix", "transpose", "width_variant", "noise_wrap"}
+        assert c.perturbation_type in {
+            "drop_suffix",
+            "transpose",
+            "width_variant",
+            "noise_wrap",
+            "homophone",
+            "drop_char",
+        }
 
 
 def test_perturbation_golden_width_variant_only_from_ascii_company(perturb_repo):
@@ -268,7 +275,14 @@ def test_write_perturbation_golden_returns_counts_only(perturb_repo, tmp_path):
     out = tmp_path / "perturbation.local.yaml"
     counts = write_perturbation_golden(perturb_repo, out, seed=1)
     assert all(isinstance(v, int) for v in counts.values())
-    assert set(counts) == {"drop_suffix", "transpose", "width_variant", "noise_wrap"}
+    assert set(counts) == {
+        "drop_suffix",
+        "transpose",
+        "width_variant",
+        "noise_wrap",
+        "homophone",
+        "drop_char",
+    }
     # 产出 yaml 能被评测 loader 读回，且带 perturbation_type
     cases = load_entity_cases(out)
     assert cases

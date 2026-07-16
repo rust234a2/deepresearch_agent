@@ -10,7 +10,9 @@ from deepresearch_agent.company_repository import _contains_name
 from deepresearch_agent.eval.models import GoldenEntityCase
 from deepresearch_agent.eval.perturb import (
     _stem,
+    drop_char,
     drop_suffix,
+    homophone,
     noise_wrap,
     transpose,
     width_variant,
@@ -169,7 +171,14 @@ def write_golden(
     return category_counts(cases)
 
 
-_PERTURBERS: tuple[str, ...] = ("drop_suffix", "transpose", "width_variant", "noise_wrap")
+_PERTURBERS: tuple[str, ...] = (
+    "drop_suffix",
+    "transpose",
+    "width_variant",
+    "noise_wrap",
+    "homophone",
+    "drop_char",
+)
 
 
 def _apply_perturber(ptype: str, name: str, rng: random.Random) -> str | None:
@@ -181,6 +190,10 @@ def _apply_perturber(ptype: str, name: str, rng: random.Random) -> str | None:
         return width_variant(name)
     if ptype == "noise_wrap":
         return noise_wrap(name)
+    if ptype == "homophone":
+        return homophone(name)
+    if ptype == "drop_char":
+        return drop_char(name, rng)
     return None
 
 
