@@ -6,7 +6,7 @@
 
 ## 最新更新
 
-- **Eval C1 扰动鲁棒性评测**（见已完成模块第 33 条）：真库结果 overall_recovery=0.86——格式类变形（去后缀/整句/全半角）recovery=1.00，相邻字对调 recovery=0.56/miss=0.44（错字类无模糊匹配的真实缺口），wrong 恒 0。C2 混合 scope 评测下一段。
+- **Eval C1 扰动鲁棒性评测**（见已完成模块第 33 条）：真库六类型表——格式类（去后缀/整句/全半角）recovery=1.00；错字类同音字 0.72 / 漏字 0.60 / 相邻字对调 0.56（单点错比对调温和，片段兜底救回多数）；wrong 恒 0（从不误解析别家）。C2 混合 scope 评测下一段。
 - Web 对话侧栏支持删除历史会话：前端二次确认后调用 `DELETE /sessions/{session_id}?user_id=...`，后端按会话 owner 校验并删除 JSON 持久化记录，同时清理浏览器中该会话的本地转录；不存在或非 owner 一律返回 404，非法会话 ID 返回 400。
 
 ## 用户协作偏好
@@ -70,7 +70,7 @@
 
 32. **关系检索中性展示**：网页和报告输出删除「（疑·须人工复核）」及所有“疑似/须人工复核/线索级”措辞。GraphRAG 保留候选企业、最终控制人、自然人或企业股权路径、同行业+同控制人等关系事实；`via_person` 等路径字段仍在结构化数据中保留，供系统内部区分来源，不作为对话提示语展示。
 
-33. **Eval C1 扰动鲁棒性评测**（新 `eval/perturb.py` + `golden_gen`/`metrics`/`runner`/CLI/脚本扩展，分支 `feature/eval-c1-perturbation`）：给企业识别补“真实输入变形”评测，量化 `resolve_supplier` 对用户实际打法的鲁棒性。**来源法真值**（每条扰动从已知企业 X 生成、理想答案恒解析到 X；种子唯一性用**独立粗粒度子串扫描**保证——非 resolver 两段式逻辑，故非循环）。四扰动类型：`drop_suffix`（去后缀）/`transpose`（相邻字对调，错字确定性代理、不引混淆字典）/`width_variant`（ASCII 转全角，NFKC 应吸收）/`noise_wrap`（整句包裹）。`perturbation_metrics` 按类型算 recovery/wrong/miss（`resolve_supplier` 返回=源 X 为回收、别家为误解析、not_found/ambiguous 为漏解析），CLI `eval perturb` 打印按类型表、无真名。起草脚本 stdout 只回条数，真名进 gitignored `perturbation.local.yaml`。**真库结果（3506 家、seed=20260716、79 条）**：overall_recovery=0.86；去后缀/整句/全半角 recovery=1.00（格式变形完全鲁棒），**相邻字对调 recovery=0.56 / miss=0.44（错字类无模糊匹配的真实缺口，但长词干 ≥4 字连续片段兜底救回过半，非全崩）**；wrong 恒 0（从不误解析别家，符合绝不猜测）；width_variant 真库仅 4 例（名含 ASCII 者少）。全确定性、零 LLM、零网络；合成 golden `perturbation.synthetic.yaml` 提交、真库 `.local.yaml` 不出库；默认测试集 304 passed。设计/计划见 `docs/superpowers/specs/2026-07-16-eval-c1-perturbation-c2-hybrid-scope-design.md` 与 `docs/superpowers/plans/2026-07-16-eval-c1-perturbation-robustness.md`。**下一段 C2 混合 scope 评测**（词面确定性下界 + DeepSeek 判官补语义命中）待做。
+33. **Eval C1 扰动鲁棒性评测**（新 `eval/perturb.py` + `golden_gen`/`metrics`/`runner`/CLI/脚本扩展，分支 `feature/eval-c1-perturbation`）：给企业识别补“真实输入变形”评测，量化 `resolve_supplier` 对用户实际打法的鲁棒性。**来源法真值**（每条扰动从已知企业 X 生成、理想答案恒解析到 X；种子唯一性用**独立粗粒度子串扫描**保证——非 resolver 两段式逻辑，故非循环）。四扰动类型：`drop_suffix`（去后缀）/`transpose`（相邻字对调，错字确定性代理、不引混淆字典）/`width_variant`（ASCII 转全角，NFKC 应吸收）/`noise_wrap`（整句包裹）。`perturbation_metrics` 按类型算 recovery/wrong/miss（`resolve_supplier` 返回=源 X 为回收、别家为误解析、not_found/ambiguous 为漏解析），CLI `eval perturb` 打印按类型表、无真名。起草脚本 stdout 只回条数，真名进 gitignored `perturbation.local.yaml`。**六扰动类型**：格式类 `drop_suffix`/`width_variant`(ASCII 转全角)/`noise_wrap`(整句包裹)，错字类 `transpose`(相邻字对调)/`homophone`(同音字替换，手工同音表 ~30 字、零依赖、覆盖有限)/`drop_char`(漏字)。**真库结果（3506 家、seed=20260716、129 条）**：overall_recovery=0.78（此值是各类等权平均、意义有限，看分类型）；**格式类全 recovery=1.00**（去后缀片段兜底、整句全名子串、全半角 NFKC 吸收）；**错字类：同音字 0.72 / 漏字 0.60 / 相邻字对调 0.56**——**反直觉发现：单点错（同音/漏字）比对调更易恢复**，因单点只破坏 1 位、词干另一侧 ≥4 字连续片段仍被 `_partial_name_score` 救回；对调扰动 2 相邻位、破坏更狠。**wrong 恒 0**（79→129 条从不误解析别家，失败必为 not_found，符合绝不猜测；对尽调工具 miss 远比 wrong 安全）。width_variant 真库仅 4 例（名含 ASCII 者少）。结论：resolver 对合格/格式类输入够用、错得安全；错字缺口真实但比单看 transpose 的 0.56 温和（单点错约 28–40% miss）；是否加模糊匹配取决于真实用户是否高频打错字（YAGNI 待定）。全确定性、零 LLM、零网络；合成 golden `perturbation.synthetic.yaml` 提交、真库 `.local.yaml` 不出库；默认测试集 308 passed。设计/计划见 `docs/superpowers/specs/2026-07-16-eval-c1-perturbation-c2-hybrid-scope-design.md` 与 `docs/superpowers/plans/2026-07-16-eval-c1-perturbation-robustness.md`。**下一段 C2 混合 scope 评测**（词面确定性下界 + DeepSeek 判官补语义命中）待做。
 
 ## 本地数据状态
 
