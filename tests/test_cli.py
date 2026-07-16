@@ -95,3 +95,20 @@ def test_cli_trace_flag_parses_and_runs(company_database_path, tmp_path, capsys)
     out = capsys.readouterr().out
     assert "示例科技股份有限公司" in out
     assert "insufficient_evidence" in out
+
+
+def test_cli_eval_perturb_prints_type_table(company_database_path, capsys):
+    main(
+        [
+            "eval", "perturb",
+            "--database", str(company_database_path),
+            "--cases", "evals/procurement/perturbation.synthetic.yaml",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert "perturbation robustness" in out
+    assert "drop_suffix" in out
+    assert "transpose" in out
+    assert "overall_recovery=" in out
+    # 红线：不泄露企业名
+    assert "示例科技" not in out

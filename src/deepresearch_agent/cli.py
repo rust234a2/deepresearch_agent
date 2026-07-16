@@ -127,6 +127,7 @@ def _eval_main(argv: list[str]) -> None:
         load_entity_cases,
         load_scope_cases,
         run_entity_resolution,
+        run_perturbation_robustness,
         run_scope_recall,
     )
 
@@ -136,6 +137,10 @@ def _eval_main(argv: list[str]) -> None:
     p_entity = sub.add_parser("entity", help="企业识别 P/R")
     p_entity.add_argument("--database", required=True)
     p_entity.add_argument("--cases", required=True)
+
+    p_perturb = sub.add_parser("perturb", help="扰动鲁棒性（按类型回收率）")
+    p_perturb.add_argument("--database", required=True)
+    p_perturb.add_argument("--cases", required=True)
 
     p_scope = sub.add_parser("scope", help="scope 检索 recall@k")
     p_scope.add_argument("--database", required=True)
@@ -153,6 +158,16 @@ def _eval_main(argv: list[str]) -> None:
             f"  cases={m.total}  accuracy={m.accuracy:.2f}  "
             f"resolved_precision={m.resolved_precision:.2f}  resolved_recall={m.resolved_recall:.2f}"
         )
+    elif args.kind == "perturb":
+        repository = CompanyRepository(args.database)
+        m = run_perturbation_robustness(repository, load_entity_cases(args.cases))
+        console.print("[bold]Eval: perturbation robustness (procurement)[/bold]")
+        console.print(f"  total={m.total}  overall_recovery={m.overall_recovery:.2f}")
+        for t in m.per_type:
+            console.print(
+                f"  {t.perturbation_type:14} n={t.n}  recovery={t.recovery:.2f}  "
+                f"wrong={t.wrong:.2f}  miss={t.miss:.2f}"
+            )
     else:
         from deepresearch_agent.rag.embedding import BgeEmbedder
         from deepresearch_agent.rag.retriever import load_scope_retriever
