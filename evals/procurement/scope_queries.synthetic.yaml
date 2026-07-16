@@ -1,0 +1,2 @@
+cases:
+  - {case_id: q_equipment, query: 工业设备, k: 10}
