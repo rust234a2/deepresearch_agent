@@ -77,3 +77,25 @@ def test_perturbation_metrics_groups_by_type():
     assert by_type["transpose"].miss == 1.0
     # per_type 按扰动类型名排序，稳定输出
     assert [t.perturbation_type for t in m.per_type] == ["drop_suffix", "transpose"]
+
+
+def test_scope_lexical_metrics_precision_recall_and_tp_count():
+    from deepresearch_agent.eval.metrics import scope_lexical_metrics
+
+    # q1: 召回 {A,Z}，词面 TP {A,B} → precision .5、recall .5、tp 2
+    # q2: 召回 {C}，词面 TP {C}     → precision 1、recall 1、tp 1
+    m = scope_lexical_metrics([{"A", "Z"}, {"C"}], [{"A", "B"}, {"C"}])
+    assert m.total == 2
+    assert m.mean_lexical_precision_at_k == 0.75      # (.5 + 1) / 2
+    assert m.mean_lexical_recall_at_k == 0.75         # (.5 + 1) / 2
+    assert m.mean_lexical_tp_count == 1.5             # (2 + 1) / 2
+
+
+def test_scope_judged_metrics_gain_over_lexical():
+    from deepresearch_agent.eval.metrics import scope_judged_metrics
+
+    # 召回 {A,B}；词面 TP {A}（只 A 字面命中）；判官覆盖 {A,B}（B 是语义命中）
+    m = scope_judged_metrics([{"A", "B"}], [{"A", "B"}], [{"A"}])
+    assert m.mean_judged_precision_at_k == 1.0        # 2/2
+    assert m.mean_noise_at_k == 0.0                   # 1 - 1
+    assert m.mean_semantic_gain_at_k == 0.5           # judged 1.0 - lexical .5

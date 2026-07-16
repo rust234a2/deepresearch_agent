@@ -7,6 +7,8 @@ from deepresearch_agent.eval.models import (
     GoldenScopeCase,
     PerturbationRobustnessMetrics,
     PerturbationTypeMetrics,
+    ScopeJudgedMetrics,
+    ScopeLexicalMetrics,
     ScopeRecallMetrics,
 )
 
@@ -92,4 +94,50 @@ def perturbation_metrics(
         total=total,
         overall_recovery=total_recovered / total if total else 1.0,
         per_type=per_type,
+    )
+
+
+def scope_lexical_metrics(
+    retrieved_per_case: list[set[str]], lexical_tp_per_case: list[set[str]]
+) -> ScopeLexicalMetrics:
+    precisions: list[float] = []
+    recalls: list[float] = []
+    tp_counts: list[float] = []
+    for retrieved, tp in zip(retrieved_per_case, lexical_tp_per_case):
+        hit = retrieved & tp
+        precisions.append(len(hit) / len(retrieved) if retrieved else 0.0)
+        recalls.append(len(hit) / len(tp) if tp else 1.0)
+        tp_counts.append(float(len(tp)))
+    total = len(retrieved_per_case)
+    return ScopeLexicalMetrics(
+        total=total,
+        mean_lexical_precision_at_k=sum(precisions) / total if total else 0.0,
+        mean_lexical_recall_at_k=sum(recalls) / total if total else 1.0,
+        mean_lexical_tp_count=sum(tp_counts) / total if total else 0.0,
+    )
+
+
+def scope_judged_metrics(
+    retrieved_per_case: list[set[str]],
+    judged_cover_per_case: list[set[str]],
+    lexical_tp_per_case: list[set[str]],
+) -> ScopeJudgedMetrics:
+    jprecs: list[float] = []
+    noises: list[float] = []
+    gains: list[float] = []
+    for retrieved, judged, tp in zip(
+        retrieved_per_case, judged_cover_per_case, lexical_tp_per_case
+    ):
+        n = len(retrieved)
+        jp = len(judged) / n if n else 0.0
+        lp = len(retrieved & tp) / n if n else 0.0
+        jprecs.append(jp)
+        noises.append(1.0 - jp)
+        gains.append(jp - lp)
+    total = len(retrieved_per_case)
+    return ScopeJudgedMetrics(
+        total=total,
+        mean_judged_precision_at_k=sum(jprecs) / total if total else 0.0,
+        mean_noise_at_k=sum(noises) / total if total else 0.0,
+        mean_semantic_gain_at_k=sum(gains) / total if total else 0.0,
     )

@@ -46,3 +46,23 @@ class PerturbationRobustnessMetrics(BaseModel):
     total: int
     overall_recovery: float
     per_type: list[PerturbationTypeMetrics]
+
+
+class ScopeQueryCase(BaseModel):
+    case_id: str
+    query: str
+    k: int = 10
+
+
+class ScopeLexicalMetrics(BaseModel):
+    total: int
+    mean_lexical_precision_at_k: float
+    mean_lexical_recall_at_k: float
+    mean_lexical_tp_count: float
+
+
+class ScopeJudgedMetrics(BaseModel):
+    total: int
+    mean_judged_precision_at_k: float
+    mean_noise_at_k: float
+    mean_semantic_gain_at_k: float
