@@ -361,9 +361,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 _PERTURB_COMPANIES = [
     {"code": _code(11), "legal_name": "泽塔精密仪器有限公司", "aliases": ""},
     {"code": _code(12), "legal_name": "ABC智能装备有限公司", "aliases": ""},
-    # 词干 "西格玛" 是下一家 "西格玛" 的子串 → 词干不唯一 → 不选作种子
-    {"code": _code(13), "legal_name": "西格玛有限公司", "aliases": ""},
-    {"code": _code(14), "legal_name": "西格玛传感器有限公司", "aliases": ""},
+    # 词干 "西格玛传感器"(≥4 字) 是下一家全名的子串 → 唯一性扫描排除，不作种子
+    {"code": _code(13), "legal_name": "西格玛传感器有限公司", "aliases": ""},
+    {"code": _code(14), "legal_name": "西格玛传感器科技集团有限公司", "aliases": ""},
 ]
 
 
@@ -411,7 +411,7 @@ def test_perturbation_golden_only_unique_stem_seeds(perturb_repo):
     cases = generate_perturbation_golden(
         perturb_repo.get_all_company_names(), perturb_repo.iter_aliases(), seed=1
     )
-    # 西格玛（词干被 "西格玛传感器" 撞、且它本身是别家子串）不作种子 → 不出现在任何扰动题的来源
+    # 西格玛传感器有限公司（词干是 "西格玛传感器科技集团有限公司" 的子串）不作种子
     seed_codes = {c.expected_code for c in cases}
     assert _code(13) not in seed_codes
     # 泽塔、ABC 词干唯一 → 是种子
