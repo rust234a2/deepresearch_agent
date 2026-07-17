@@ -37,3 +37,19 @@ def test_judge_false_on_garbage():
 def test_judge_none_without_key(monkeypatch):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     assert build_deepseek_scope_judge() is None
+
+
+def test_judge_raises_on_client_error():
+    # 系统性调用失败必须响亮报错，绝不静默吞成 False 污染指标（jiter 泄漏教训）
+    import pytest
+
+    class _BoomCompletions:
+        def create(self, **kw):
+            raise RuntimeError("api down")
+
+    class _BoomClient:
+        chat = type("Chat", (), {"completions": _BoomCompletions()})()
+
+    judge = build_deepseek_scope_judge(client=_BoomClient())
+    with pytest.raises(RuntimeError):
+        judge("注塑", "任意文本")

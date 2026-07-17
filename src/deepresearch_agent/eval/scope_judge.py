@@ -37,17 +37,17 @@ def build_deepseek_scope_judge(
         client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0, max_retries=2)
 
     def judge(query: str, scope: str) -> bool:
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                temperature=0,
-                messages=[
-                    {"role": "system", "content": _JUDGE_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"能力：{query}\n经营范围：{scope}"},
-                ],
-            )
-            return _parse_bool(response.choices[0].message.content)
-        except Exception:
-            return False
+        # 刻意不吞异常：SDK 的 max_retries 已吸收瞬时抖动，逃逸出来的是系统性失败
+        # （坏 key/错模型/环境损坏），会影响全部调用。响亮报错好过静默返回 False
+        # 把评测指标污染成假的“0% 覆盖”（jiter 原生扩展泄漏正是这样潜伏的）。
+        response = client.chat.completions.create(
+            model=model,
+            temperature=0,
+            messages=[
+                {"role": "system", "content": _JUDGE_SYSTEM_PROMPT},
+                {"role": "user", "content": f"能力：{query}\n经营范围：{scope}"},
+            ],
+        )
+        return _parse_bool(response.choices[0].message.content)
 
     return judge
