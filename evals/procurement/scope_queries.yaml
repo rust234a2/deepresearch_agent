@@ -1,0 +1,16 @@
+cases:
+  - {case_id: q_injection, query: 注塑, k: 10}
+  - {case_id: q_mould, query: 模具, k: 10}
+  - {case_id: q_machining, query: 机械加工, k: 10}
+  - {case_id: q_hardware, query: 五金, k: 10}
+  - {case_id: q_electronic, query: 电子元器件, k: 10}
+  - {case_id: q_autoparts, query: 汽车零部件, k: 10}
+  - {case_id: q_plastic, query: 塑料制品, k: 10}
+  - {case_id: q_sheetmetal, query: 钣金, k: 10}
+  - {case_id: q_welding, query: 焊接, k: 10}
+  - {case_id: q_surface, query: 表面处理, k: 10}
+  - {case_id: q_package, query: 包装材料, k: 10}
+  - {case_id: q_rubber, query: 橡胶制品, k: 10}
+  - {case_id: q_casting, query: 铸造, k: 10}
+  - {case_id: q_automation, query: 自动化设备, k: 10}
+  - {case_id: q_cnc, query: 数控, k: 10}
